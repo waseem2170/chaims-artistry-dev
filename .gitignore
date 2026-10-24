@@ -1,0 +1,8 @@
+.DS_Store
+.env*
+!.env.example
+node_modules/
+*service-account*.json
+*credentials*.json
+*-preview*.png
+calendar-connection-test.html

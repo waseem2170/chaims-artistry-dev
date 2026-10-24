@@ -1,0 +1,9 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {belgiumTime,availableStarts,lockIds,validateParty} from './assets/schedule.mjs';
+test('hourly starts include 09:00 and 19:00',()=>{const s=availableStarts('2026-11-02',new Set(),0);assert.equal(s.length,11);assert.equal(s[0].hour,9);assert.equal(s.at(-1).hour,19);});
+test('13:00 booking blocks overlapping visits and preserves 09:00 and 17:00',()=>{const s=availableStarts('2026-11-02',new Set(lockIds(belgiumTime('2026-11-02',13))),0).map(s=>s.hour);assert.deepEqual(s,[9,17,18,19]);});
+test('19:00 visit lasts through 22:00 with break to 23:00',()=>{const ids=lockIds(belgiumTime('2026-11-02',19));assert.equal(ids.length,4);assert.equal(Number(ids.at(-1))-Number(ids[0]),3);});
+test('Belgian DST offsets preserve the selected local hour',()=>{assert.equal(new Date(belgiumTime('2026-10-24',9)).toISOString(),'2026-10-24T07:00:00.000Z');assert.equal(new Date(belgiumTime('2026-10-26',9)).toISOString(),'2026-10-26T08:00:00.000Z');});
+test('group accepts mixed makeup for 1–3 named people',()=>{const p=[{name:'A',makeup:'guest'},{name:'B',makeup:'bridal'}];assert.equal(validateParty(p),true);assert.equal(validateParty([]),false);assert.equal(validateParty([...p,...p]),false);assert.equal(validateParty([{name:'A',makeup:'unknown'}]),false);});
+test('past starts are not offered',()=>assert.equal(availableStarts('2026-11-02',new Set(),Date.parse('2026-11-03')).length,0));
+
+test('same-day starts are blocked even before opening, including Belgium midnight',()=>{assert.deepEqual(availableStarts('2026-10-23',new Set(),Date.parse('2026-10-23T04:00:00Z')),[]);assert.deepEqual(availableStarts('2026-10-24',new Set(),Date.parse('2026-10-23T22:30:00Z')),[]);assert.equal(availableStarts('2026-10-25',new Set(),Date.parse('2026-10-23T22:30:00Z')).length,11);});
