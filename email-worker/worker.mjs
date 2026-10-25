@@ -6,7 +6,7 @@ export function bookingEmail(kind,b,id,env){
  const fee=new Intl.NumberFormat('en-BE',{style:'currency',currency:'EUR'}).format(b.reservationFee/100);
  const people=b.people.map((p,i)=>`${i+1}. ${p.name} · ${p.makeup==='bridal'?'Bridal Makeup':'Guest Makeup'}`).join('\n');
  const admin=kind==='admin',payment=kind==='request',confirmed=kind==='confirmed',reschedule=kind==='reschedule';
- const title=reschedule?'Let’s find another time.':admin?'A new appointment request.':payment?'Your glam moment is calling!':confirmed?'You’re booked in girlll!':'An update on your appointment.';
+ const title=reschedule?'Let’s find another time.':admin?'A new appointment request.':payment?'Your glam moment is calling!':confirmed?'You’re booked in girlll!':'Oops… your appointment has been cancelled.';
  const badge=reschedule?'LET’S PLAN YOUR VISIT':admin?'APPROVAL NEEDED':payment?'RESERVATION REQUEST':confirmed?'APPOINTMENT CONFIRMED':'APPOINTMENT UPDATE';
  const intro=reschedule?b.rescheduleMessage:admin?'A customer has requested an appointment. Check the bank transfer before approving their reservation.':payment?'Thank you for choosing CHAIMS Artistry. You’ll find your appointment and reservation payment details below.':confirmed?'Your reservation payment has been received. We look forward to creating your look.':'Your appointment request has been declined or cancelled, and the time has been released. If you have already transferred payment, please reply to this email.';
  const greeting=admin?'Hello Chaima,':`Hello ${b.name},`;
@@ -126,7 +126,7 @@ export default {async fetch(request,env){
    await send('client',b.email,'CHAIMS · Your reservation & payment details','request');
    await send('admin',env.ADMIN_EMAIL,'CHAIMS · New appointment to review','admin',attachments);
   }else if(kind==='reschedule')await send('client',b.email,subject,'reschedule');
-  else await send('client',b.email,kind==='confirmed'?'CHAIMS · Your appointment is confirmed':'CHAIMS · An update on your appointment',kind);
+  else await send('client',b.email,kind==='confirmed'?'CHAIMS · Your appointment is confirmed':'CHAIMS · Oops… your appointment has been cancelled',kind);
   if(['confirmed','declined'].includes(kind)&&env.GOOGLE_CALENDAR_ID){await syncCalendar(b,id,env);}
   return reply('Emails accepted');
  }catch{return reply('Email delivery did not finish; retry the same booking',502);}

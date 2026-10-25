@@ -8,5 +8,5 @@ export function bookingPage(bookings,tab,search='',page=1,formatDate=String){
 
 export function sortBookings(bookings,order='newest'){
  const timestamp=value=>typeof value?.toMillis==='function'?value.toMillis():value?.seconds?value.seconds*1000:Date.parse(value)||0;
- return [...bookings].sort((a,b)=>{const result=order==='date'?timestamp(a.start)-timestamp(b.start):(timestamp(a.createdAt)-timestamp(b.createdAt))*(order==='oldest'?1:-1);return result||String(a.id).localeCompare(String(b.id));});
+ return [...bookings].sort((a,b)=>{const result=(order==='date'||order==='date-desc')?(timestamp(a.start)-timestamp(b.start))*(order==='date-desc'?-1:1):(timestamp(a.createdAt)-timestamp(b.createdAt))*(order==='oldest'?1:-1);return result||String(a.id).localeCompare(String(b.id));});
 }
