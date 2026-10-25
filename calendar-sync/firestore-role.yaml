@@ -1,0 +1,9 @@
+title: CHAIMS Calendar Sync Data
+description: Read known bookings and atomically update bookings, time locks and sync outbox. No user administration or billing permissions.
+stage: GA
+includedPermissions:
+- datastore.databases.get
+- datastore.entities.get
+- datastore.entities.create
+- datastore.entities.update
+- datastore.entities.delete

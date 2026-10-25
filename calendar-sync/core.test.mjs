@@ -1,0 +1,13 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {planChange,processBooking} from './core.mjs';
+const now=Date.parse('2026-10-25T12:00:00Z'),b={status:'confirmed',startAt:'2026-11-01T12:00:00Z',date:'2026-11-01',hour:13};
+const event={etag:'v2',extendedProperties:{private:{chaimsBookingId:'test1',chaimsProject:'dev'}},start:{dateTime:'2026-11-02T12:00:00Z'},end:{dateTime:'2026-11-02T15:00:00Z'}};
+test('move holds three hours plus break and uses Belgium timezone',()=>{const p=planChange(b,event,'test1','dev',now);assert.equal(p.hour,13);assert.equal(p.newLocks.length,4);assert.equal(p.date,'2026-11-02');});
+test('explicit cancellation releases locks',()=>{const p=planChange(b,{status:'cancelled'},'test1','dev',now);assert.equal(p.status,'declined');assert.deepEqual(p.newLocks,[]);});
+test('reject unrelated, recurring, all-day and resized events',()=>{for(const e of [{...event,extendedProperties:{}},{...event,recurrence:['RRULE:FREQ=DAILY']},{...event,start:{date:'2026-11-02'}},{...event,end:{dateTime:'2026-11-02T14:00:00Z'}}])assert.throws(()=>planChange(b,e,'test1','dev',now));});
+test('replayed updates do nothing',()=>assert.equal(planChange({...b,startAt:event.start.dateTime},event,'test1','dev',now),null));
+test('missing event never cancels a booking',async()=>{let writes=0;assert.equal(await processBooking({readBooking:async()=>b,readEvent:async()=>null,apply:async()=>writes++},'test1','dev',now),'missing');assert.equal(writes,0);});
+test('transaction conflicts are reported without sending email',async()=>{let reports=0;assert.equal(await processBooking({readBooking:async()=>b,readEvent:async()=>event,apply:async()=>{throw Error('Time occupied');},report:async()=>reports++},'test1','dev',now),'conflict');assert.equal(reports,1);});
+import worker,{run} from './worker.mjs';
+test('disabled deployment does not access external services',async t=>{t.mock.method(globalThis,'fetch',()=>{throw Error('Unexpected network');});await run({SYNC_ENABLED:'false'});});
+test('production and empty test allowlists fail closed',async()=>{await assert.rejects(run({SYNC_ENABLED:'true',SYNC_MODE:'production'}));await assert.rejects(run({SYNC_ENABLED:'true',SYNC_MODE:'dev'}));});
+test('public requests cannot trigger sync',async()=>assert.equal((await worker.fetch()).status,404));

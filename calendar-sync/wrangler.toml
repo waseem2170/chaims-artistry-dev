@@ -1,0 +1,13 @@
+name = "chaims-calendar-sync-dev"
+main = "worker.mjs"
+compatibility_date = "2026-10-01"
+[vars]
+SYNC_ENABLED = "false"
+SYNC_MODE = "dev"
+FIREBASE_PROJECT_ID = "chaims-artistry"
+# Explicit test booking IDs and test inboxes only. Never list real bookings.
+TEST_BOOKING_IDS = ""
+TEST_RECIPIENTS = ""
+# Configure the dedicated calendar ID and verified sender before enabling.
+[triggers]
+crons = ["* * * * *"]
