@@ -27,3 +27,4 @@
 .hero-just:after{content:attr(data-word)!important}.language-picker select{cursor:pointer}.nav nav{align-items:center}
 
 #booking-times{min-height:80px;text-align:center;align-content:center}.booking-times:not(:has(button)){display:block;padding:25px 10px}#navigation{position:relative}#navigation .language-picker{margin-left:22px}@media(min-width:761px){#navigation .language-picker{position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:28px}}@media(max-width:760px){#navigation .language-picker{position:static;margin:12px 0;transform:none;justify-content:center}}
+.language-picker>span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
