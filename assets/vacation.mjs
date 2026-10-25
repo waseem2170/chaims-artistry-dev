@@ -3,3 +3,5 @@ export function dateRange(start,end){if(!validDate(start)||!validDate(end)||end<
 export function vacationDates(values){const dates=[...new Set(values)].sort();if(!dates.length||dates.length>366||dates.some(d=>!validDate(d)))throw Error('Choose between 1 and 366 valid dates.');return dates;}
 export const affectedBookings=(bookings,dates)=>bookings.filter(b=>dates.includes(b.date)&&['pending_payment','pending_approval','awaiting_payment','confirmed'].includes(b.status));
 export async function withTimeout(promise,ms=12000){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('The connection is taking too long. Please try again.')),ms))]);}finally{clearTimeout(timer);}}
+
+export function expiredVacation(job,today){return ['complete','removed'].includes(job.status)&&Array.isArray(job.dates)&&job.dates.length>0&&job.dates.every(date=>/^\d{4}-\d{2}-\d{2}$/.test(date)&&date<today);}

@@ -1,4 +1,4 @@
-import {locale} from './i18n.js?v=20261025f';
+import {locale} from './i18n.js?v=20261025g';
 import {dateKey} from './schedule.mjs';
 import {dateRange,affectedBookings} from './vacation.mjs';
 import {bookingConfig} from './booking-config.js';
