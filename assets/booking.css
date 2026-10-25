@@ -26,5 +26,8 @@
 
 .hero-just:after{content:attr(data-word)!important}.language-picker select{cursor:pointer}.nav nav{align-items:center}
 
-#booking-times{min-height:80px;text-align:center;align-content:center}.booking-times:not(:has(button)){display:block;padding:25px 10px}#navigation{position:relative}#navigation .language-picker{margin-left:22px}@media(min-width:761px){#navigation .language-picker{position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:28px}}@media(max-width:760px){#navigation .language-picker{position:static;margin:12px 0;transform:none;justify-content:center}}
 .language-picker>span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+
+.custom-booking #booking-times .booking-times-empty{grid-column:1/-1;width:100%;max-width:none;text-align:center;margin:0;padding:40px 12px;line-height:1.6;box-sizing:border-box}
+@media(min-width:701px){.hero-nav #navigation{position:static}.hero-nav #navigation .language-picker{position:absolute;right:clamp(20px,4vw,60px);top:50%;transform:translateY(-50%);margin:0}.hero-nav #navigation{padding-right:100px}}
+@media(max-width:700px){.mobile-menu-root{position:relative;z-index:100}.mobile-menu-root #navigation{position:fixed;left:auto;right:16px;top:82px;bottom:auto;width:min(280px,calc(100vw - 32px));display:flex;flex-direction:column;align-items:stretch;gap:12px}.mobile-menu-root #navigation.open{opacity:1;visibility:visible;pointer-events:auto;transform:none}.mobile-menu-root .menu-toggle,body.menu-idle .mobile-menu-root .menu-toggle,body.at-footer .mobile-menu-root .menu-toggle{position:fixed;top:20px;bottom:auto;right:16px;left:auto;opacity:1;visibility:visible;pointer-events:auto;z-index:101}.mobile-menu-root #navigation .language-picker{position:static;transform:none;margin:4px 0;justify-content:flex-start}.mobile-menu-root #navigation a{padding:8px 4px}.language-picker select{min-height:44px}}

@@ -1,5 +1,5 @@
-import {locale,t} from './i18n.js?v=20261025c';
-import {setupVacation} from './admin-vacation.js?v=20261025c';
+import {locale,t} from './i18n.js?v=20261025d';
+import {setupVacation} from './admin-vacation.js?v=20261025d';
 import {bucket,bookingPage,sortBookings} from './admin-list.mjs';
 import {ADMIN_SESSION_MS,requireFreshAdmin} from './admin-session.mjs';
 import {sendBookingEmail} from './booking-email.js';
@@ -48,7 +48,7 @@ $('admin-search').oninput=e=>{search=e.target.value.trim().toLowerCase();page=1;
 $('admin-prev').onclick=()=>{page--;render();};$('admin-next').onclick=()=>{page++;render();};
 $('admin-login').onclick=async()=>{if(!api)return;const button=$('admin-login');button.disabled=true;button.classList.add('is-loading');try{await api.signIn();}catch(e){status('Google sign-in did not finish. Please try again.');}finally{button.disabled=false;button.classList.remove('is-loading');}};
 $('admin-logout').onclick=()=>api.signOut();$('admin-refresh').onclick=async()=>{const button=$('admin-refresh');button.disabled=true;button.classList.add('is-loading');try{await guard();await load();}catch(e){$('admin-bookings').textContent=e.message;}finally{button.disabled=false;button.classList.remove('is-loading');}};
-try{api=await(await import('./firebase-booking.js?v=20261025c')).connectBooking(bookingConfig,async user=>{
+try{api=await(await import('./firebase-booking.js?v=20261025d')).connectBooking(bookingConfig,async user=>{
  clearTimeout(expiryTimer);const version=++sessionVersion;currentUser=user;bookings=[];$('admin-bookings').replaceChildren();$('admin-tools').hidden=true;$('admin-brandbar').hidden=true;$('admin-profile').hidden=true;$('admin-profile').open=false;$('admin-gate').hidden=false;$('admin-login').disabled=!api;
  if(!user)return status('');status('Checking admin access…');
  try{await requireFreshAdmin(user);const token=await user.getIdTokenResult();expiryTimer=setTimeout(()=>{expireAdmin();},Math.max(0,Date.parse(token.authTime)+ADMIN_SESSION_MS-Date.now()));if(!await api.isAdmin()){status('This Google account does not have admin access.');$('admin-login').textContent='Use another Google account';return;}if(version!==sessionVersion)return;$('admin-account').textContent=user.email;$('admin-avatar').textContent=(user.displayName||user.email||'C').slice(0,1).toUpperCase();$('admin-profile').hidden=false;$('admin-tools').hidden=false;$('admin-brandbar').hidden=false;$('admin-gate').hidden=true;status('');await load();}catch{await api.signOut();status('Please sign in again to start a fresh 30-minute admin session.');}
