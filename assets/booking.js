@@ -66,11 +66,11 @@ function emailSent(email,preview=false){
  const title=document.createElement('strong');title.textContent=preview?'Preview: check your inbox':'Open your email to continue';
  const copy=document.createElement('p');copy.textContent=preview?'This is a preview. No email was sent.':`We’ve sent a secure link to ${email}. Open that email and tap the sign-in link. You’ll return here to finish your booking.`;
  const spam=document.createElement('p');spam.className='email-spam-note';spam.textContent='Can’t find it? Check your spam or junk folder.';
- panel.append(icon,title,copy,spam);panel.hidden=false;$('email-send').textContent='Send another link';message('');
+ panel.append(icon,title,copy,spam);panel.hidden=false;$('email-send').textContent='Send another link';message('');scrollRevision++;panel.tabIndex=-1;requestAnimationFrame(()=>{panel.focus({preventScroll:true});panel.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});});
 }
 async function completeEmail(email){
  const button=$('email-complete');button.disabled=true;
- try{await api.completeEmailLink(email);$('email-complete').hidden=true;$('email-send').hidden=false;show(slot?2:0);message('Email verified. You can complete your booking.');}
+ try{await api.completeEmailLink(email);$('email-complete').hidden=true;$('email-send').hidden=false;show(slot?2:0);message('');}
  catch(e){message('This sign-in link has expired or has already been used. Please request a new link.');$('email-send').hidden=false;}
  finally{button.disabled=false;}
 }
