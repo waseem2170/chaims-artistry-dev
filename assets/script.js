@@ -108,6 +108,7 @@ updatePrepProgress();
 
 // Remove the finished fullscreen intro from painting and hit testing entirely.
 const signatureIntro = document.querySelector('.signature-intro');
+if(document.documentElement.classList.contains('skip-intro')){signatureIntro?.remove();document.body.classList.add('intro-complete');}
 signatureIntro?.addEventListener('animationend', event => {
   if (event.target === signatureIntro && ['signature-exit', 'logo-intro-finish'].includes(event.animationName)) {
     signatureIntro.remove();
@@ -318,7 +319,7 @@ mobileMenuQuery.addEventListener('change', placeNavigation);
 placeNavigation();
 // Attention cue once, after both page loading and the intro have completed.
 let pageReady = document.readyState === 'complete';
-let introReady = !document.querySelector('.logo-intro') || reducedMotion.matches;
+let introReady = document.documentElement.classList.contains('skip-intro') || !document.querySelector('.logo-intro') || reducedMotion.matches;
 function revealBookingCue() {
   if (pageReady && introReady) document.body.classList.add('intro-complete');
 }

@@ -6,7 +6,7 @@ export function bookingEmail(kind,b,id,env){
  const fee=new Intl.NumberFormat('en-BE',{style:'currency',currency:'EUR'}).format(b.reservationFee/100);
  const people=b.people.map((p,i)=>`${i+1}. ${p.name} · ${p.makeup==='bridal'?'Bridal Makeup':'Guest Makeup'}`).join('\n');
  const admin=kind==='admin',payment=kind==='request',confirmed=kind==='confirmed',reschedule=kind==='reschedule';
- const title=reschedule?'Let’s find another time.':admin?'A new appointment request.':payment?'Your beauty date awaits.':confirmed?'You’re booked in.':'An update on your appointment.';
+ const title=reschedule?'Let’s find another time.':admin?'A new appointment request.':payment?'Your glam moment is calling!':confirmed?'You’re booked in girlll!':'An update on your appointment.';
  const badge=reschedule?'LET’S PLAN YOUR VISIT':admin?'APPROVAL NEEDED':payment?'RESERVATION REQUEST':confirmed?'APPOINTMENT CONFIRMED':'APPOINTMENT UPDATE';
  const intro=reschedule?b.rescheduleMessage:admin?'A customer has requested an appointment. Check the bank transfer before approving their reservation.':payment?'Thank you for choosing CHAIMS Artistry. You’ll find your appointment and reservation payment details below.':confirmed?'Your reservation payment has been received. We look forward to creating your look.':'Your appointment request has been declined or cancelled, and the time has been released. If you have already transferred payment, please reply to this email.';
  const greeting=admin?'Hello Chaima,':`Hello ${b.name},`;
@@ -27,7 +27,7 @@ export function customerCalendarLink(b,id){
  const start=new Date(b.startAt);if(!Number.isFinite(start.getTime()))throw Error('Invalid appointment date');
  const format=d=>d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
  const url=new URL('https://calendar.google.com/calendar/r/eventedit');
- url.search=new URLSearchParams({action:'TEMPLATE',text:'CHAIMS Artistry · Makeup appointment',dates:format(start)+'/'+format(new Date(start.getTime()+3*3600000)),stz:'Europe/Brussels',etz:'Europe/Brussels',location:b.address||'',details:'Booking reference: '+id});
+ url.search=new URLSearchParams({action:'TEMPLATE',text:'CHAIMS Artistry · Makeup appointment',dates:format(start)+'/'+format(new Date(start.getTime()+3*3600000)),stz:'Europe/Brussels',etz:'Europe/Brussels',location:b.address||'',details:'Booking reference: '+id}).toString();
  return url.href;
 }
 

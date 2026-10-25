@@ -7,6 +7,11 @@ service cloud.firestore {
   function freshAdmin() { return google() && request.time.toMillis() >= request.auth.token.auth_time * 1000 && request.time.toMillis() < request.auth.token.auth_time * 1000 + 1800000; }
   function admin() { return freshAdmin() && exists(/databases/$(database)/documents/owners/$(request.auth.uid)) && get(/databases/$(database)/documents/owners/$(request.auth.uid)).data.enabled == true; }
   match /owners/{uid} { allow get: if freshAdmin() && request.auth.uid == uid; allow list, write: if false; }
+  match /closedDates/{date} {
+   allow read: if true;
+   allow create, update, delete: if admin();
+  }
+  match /vacationJobs/{id} { allow read, write: if admin(); }
   match /timeLocks/{key} {
    allow read: if true;
    allow create: if admin() || validLock(key);
@@ -49,6 +54,7 @@ service cloud.firestore {
      && person(b.people[0]) && (b.people.size() < 2 || person(b.people[1])) && (b.people.size() < 3 || person(b.people[2]))
      && b.reservationFee == b.people.size() * 2000 && b.currency == 'eur'
      && b.status == 'pending_payment' && b.createdAt == request.time
+     && !exists(/databases/$(database)/documents/closedDates/$(b.date))
      && b.hour is int && b.hour >= 9 && b.hour <= 19
      && b.startAt is timestamp && b.startAt > request.time && b.startAt.date() > localDate(request.time)
      && b.startAt.minutes() == 0 && b.startAt.seconds() == 0 && b.startAt.nanos() == 0

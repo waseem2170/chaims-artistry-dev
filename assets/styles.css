@@ -688,3 +688,5 @@ body.intro-complete .hero-just::after{animation:just-underline-ink 1.6s ease-out
 .editorial-hero .hero-makeup-texture{object-fit:cover;object-position:left center;filter:none;opacity:1;transform:translateY(var(--makeup-scroll-y,0px))}
 .hero-bottom-swipe img{filter:none}
 @media(max-width:700px){.editorial-hero .hero-makeup-texture{object-fit:contain;object-position:left top}}
+
+.skip-intro .signature-intro{display:none!important}.skip-intro .fixed-brand,.skip-intro .hero-nav,.skip-intro .hero-inner{animation:none!important;opacity:1!important}

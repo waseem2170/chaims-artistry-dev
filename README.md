@@ -2,7 +2,7 @@
 
 Development repository. Changes are reviewed here first; production repository `waseem2170/chaims-artistry` is updated only after explicit approval.
 
-GitHub Pages: serve main / root. Relative website assets support the /chaims-artistry-dev/ project path. DEV uses the current Firebase project at the user’s request: bookings affect real availability and emails. Add waseem2170.github.io to Firebase authorised domains, reCAPTCHA hostnames and the Worker origin allowlist before testing. The DEV URL path is /chaims-artistry-dev/. No automatic publishing to production is configured.
+GitHub Pages: serve main / root. Relative website assets support the /chaims-artistry-dev/ project path. DEV uses the current Firebase project at the user’s request: bookings affect real availability and emails. The DEV hostname is allowed in Firebase, reCAPTCHA and the Worker origin allowlist. The DEV URL path is /chaims-artistry-dev/. No automatic publishing to production is configured.
 
 The Firebase web config is public application configuration, not a server credential. Worker secrets remain encrypted in Cloudflare; no credentials, private email previews, customer data, test harnesses or local screenshots belong here. Do not upload service-account JSON.
 
