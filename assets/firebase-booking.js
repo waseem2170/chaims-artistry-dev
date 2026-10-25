@@ -3,7 +3,7 @@ import {requireFreshAdmin} from './admin-session.mjs';
 import {configureAttestation,bookingAttestation} from './firebase-attestation.js';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut,sendSignInLinkToEmail,isSignInWithEmailLink,signInWithEmailLink} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
-import {getFirestore,collection,doc,getDoc,getDocs,getDocFromServer,getDocsFromServer,writeBatch,updateDoc,arrayUnion,query,where,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
+import {getFirestore,onSnapshot,collection,doc,getDoc,getDocs,getDocFromServer,getDocsFromServer,writeBatch,updateDoc,arrayUnion,query,where,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
 import {dateKey,belgiumTime,lockIds,availableStarts,validateParty} from './schedule.mjs';
 export async function connectBooking(config,onUser){
  const app=initializeApp(config.firebase);configureAttestation(app,config);
@@ -13,6 +13,7 @@ export async function connectBooking(config,onUser){
  const requireAdmin=async()=>{try{await requireFreshAdmin(auth.currentUser);}catch(e){await signOut(auth);throw e;}if(!await isAdmin())throw Error('Admin access is required. Please sign in with your authorised Google account.');};
  return {
  verifyClient:bookingAttestation,
+ watchClosedDates:(next,error)=>onSnapshot(collection(db,'closedDates'),snapshot=>next(new Set(snapshot.docs.map(d=>d.id))),error),
  signIn:()=>{const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});return withTimeout(signInWithPopup(auth,provider),45000);},
  isEmailLink:()=>isSignInWithEmailLink(auth,location.href),
  sendEmailLink:async email=>{

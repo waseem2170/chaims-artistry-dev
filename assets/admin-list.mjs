@@ -5,3 +5,8 @@ export function bookingPage(bookings,tab,search='',page=1,formatDate=String){
  const pages=Math.max(1,Math.ceil(matched.length/10));page=Math.max(1,Math.min(page,pages));
  return {page,pages,total:matched.length,visible:matched.slice((page-1)*10,page*10)};
 }
+
+export function sortBookings(bookings,order='newest'){
+ const timestamp=value=>typeof value?.toMillis==='function'?value.toMillis():value?.seconds?value.seconds*1000:Date.parse(value)||0;
+ return [...bookings].sort((a,b)=>{const result=order==='date'?timestamp(a.start)-timestamp(b.start):(timestamp(a.createdAt)-timestamp(b.createdAt))*(order==='oldest'?1:-1);return result||String(a.id).localeCompare(String(b.id));});
+}
