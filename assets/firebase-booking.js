@@ -4,7 +4,7 @@ import {configureAttestation,bookingAttestation} from './firebase-attestation.js
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut,sendSignInLinkToEmail,isSignInWithEmailLink,signInWithEmailLink} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
 import {getFirestore,onSnapshot,collection,doc,getDoc,getDocs,getDocFromServer,getDocsFromServer,writeBatch,updateDoc,arrayUnion,query,where,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
-import {dateKey,belgiumTime,lockIds,availableStarts,validateParty} from './schedule.mjs';
+import {dateKey,belgiumTime,lockIds,availableStarts,validateParty,partyDuration,bookingDuration} from './schedule.mjs?v=20261026b';
 export async function connectBooking(config,onUser){
  const app=initializeApp(config.firebase);configureAttestation(app,config);
  const auth=getAuth(app),db=getFirestore(app);
@@ -27,12 +27,12 @@ export async function connectBooking(config,onUser){
   return result;
  },
  signOut:()=>signOut(auth),isAdmin,requireAdmin,
- availability:async date=>{
+ availability:async (date,minutes=60)=>{
   if(date<=dateKey())return [];
-  const start=belgiumTime(date,9)/3600000,end=belgiumTime(date,23)/3600000;
+  const start=belgiumTime(date,9)/3600000,end=belgiumTime(date,19)/3600000+6;
   const [closed,snap]=await withTimeout(Promise.all([getDocFromServer(doc(db,'closedDates',date)),getDocsFromServer(query(collection(db,'timeLocks'),where('hour','>=',start),where('hour','<',end)))]));
   if(closed.exists())return [];
-  return availableStarts(date,new Set(snap.docs.map(d=>d.id)));
+  return availableStarts(date,new Set(snap.docs.map(d=>d.id)),Date.now(),minutes);
  },
  book:async input=>{
   const u=auth.currentUser;if(!u)throw Error('Please sign in with Google or an email link.');
@@ -46,11 +46,11 @@ export async function connectBooking(config,onUser){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(input.date)||!Number.isInteger(input.hour)||input.hour<9||input.hour>19)throw Error('Please choose an available date and time.');
   if(input.date<=dateKey())throw Error('Please choose a date from tomorrow onwards.');
   if(!validateParty(input.people))throw Error('Please check each person’s name and makeup service.');
-  const ref=doc(collection(db,'bookings')),start=belgiumTime(input.date,input.hour),ids=lockIds(start);
+  const ref=doc(collection(db,'bookings')),start=belgiumTime(input.date,input.hour),durationMinutes=partyDuration(input.people),ids=lockIds(start,durationMinutes);
   await runTransaction(db,async t=>{
    const closed=await t.get(doc(db,'closedDates',input.date));if(closed.exists())throw Error('This date is unavailable. Please choose another day.');
    const locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));if(locks.some(s=>s.exists()))throw Error('This time was just reserved. Please choose another time.');
-   t.set(ref,{...input,uid:u.uid,email:u.email,status:'pending_payment',reservationFee:input.people.length*2000,currency:'eur',startAt:Timestamp.fromMillis(start),createdAt:serverTimestamp()});
+   t.set(ref,{...input,durationMinutes,uid:u.uid,email:u.email,status:'pending_payment',reservationFee:input.people.length*2000,currency:'eur',startAt:Timestamp.fromMillis(start),createdAt:serverTimestamp()});
    ids.forEach(id=>t.set(doc(db,'timeLocks',id),{hour:Number(id),bookingId:ref.id}));
   });return {id:ref.id};
  },
@@ -59,7 +59,7 @@ export async function connectBooking(config,onUser){
  listVacations:async()=>{await requireAdmin();const snap=await getDocsFromServer(collection(db,'vacationJobs'));const active=[];for(const entry of snap.docs){const job={id:entry.id,...entry.data()};if(!expiredVacation(job,dateKey())){active.push(job);continue;}await requireAdmin();await runTransaction(db,async t=>{const fresh=await t.get(entry.ref);if(!fresh.exists()||!expiredVacation(fresh.data(),dateKey()))return;const days=await Promise.all(fresh.data().dates.map(date=>t.get(doc(db,'closedDates',date))));for(const day of days)if(day.exists()&&day.data().jobId===entry.id)t.delete(day.ref);t.delete(entry.ref);});}return active.sort((a,b)=>a.dates[0].localeCompare(b.dates[0]));},
  blockVacation:async values=>{await requireAdmin();const dates=vacationDates(values);if(dates.some(d=>d<dateKey()))throw Error('Vacation dates cannot be in the past.');const job=doc(collection(db,'vacationJobs')),batch=writeBatch(db);dates.forEach(date=>batch.set(doc(db,'closedDates',date),{jobId:job.id,createdAt:serverTimestamp()}));batch.set(job,{dates,createdAt:serverTimestamp(),sent:[],cancelled:[],status:'processing'});await batch.commit();return job.id;},
  vacationCancellations:async jobId=>{await requireAdmin();const jobRef=doc(db,'vacationJobs',jobId),jobSnap=await getDocFromServer(jobRef);if(!jobSnap.exists())throw Error('Vacation not found.');const job=jobSnap.data();if(job.status==='removed')return [];const snap=await getDocsFromServer(query(collection(db,'bookings'),where('status','in',['pending_payment','confirmed','pending_approval','awaiting_payment'])));const affected=affectedBookings(snap.docs.map(d=>({id:d.id,...d.data()})),job.dates);
-  for(const booking of affected){await requireAdmin();await runTransaction(db,async t=>{const ref=doc(db,'bookings',booking.id),current=await t.get(ref);if(!current.exists()||!['pending_payment','confirmed','pending_approval','awaiting_payment'].includes(current.data().status))return;const b=current.data();const closed=await t.get(doc(db,'closedDates',b.date));if(!closed.exists())return;const ids=lockIds(b.startAt.toMillis()),locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));t.update(ref,{status:'declined',reviewedAt:serverTimestamp(),vacationJob:jobId});t.update(jobRef,{cancelled:arrayUnion(booking.id)});ids.forEach((key,i)=>{if(locks[i].data()?.bookingId===booking.id)t.delete(doc(db,'timeLocks',key));});});}
+  for(const booking of affected){await requireAdmin();await runTransaction(db,async t=>{const ref=doc(db,'bookings',booking.id),current=await t.get(ref);if(!current.exists()||!['pending_payment','confirmed','pending_approval','awaiting_payment'].includes(current.data().status))return;const b=current.data();const closed=await t.get(doc(db,'closedDates',b.date));if(!closed.exists())return;const ids=lockIds(b.startAt.toMillis(),bookingDuration(b)),locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));t.update(ref,{status:'declined',reviewedAt:serverTimestamp(),vacationJob:jobId});t.update(jobRef,{cancelled:arrayUnion(booking.id)});ids.forEach((key,i)=>{if(locks[i].data()?.bookingId===booking.id)t.delete(doc(db,'timeLocks',key));});});}
   const latest=(await getDocFromServer(jobRef)).data();return (latest.cancelled||[]).filter(id=>!(latest.sent||[]).includes(id));
  },
  vacationNotified:async(jobId,id)=>{await requireAdmin();await updateDoc(doc(db,'vacationJobs',jobId),{sent:arrayUnion(id)});},
@@ -70,7 +70,7 @@ export async function connectBooking(config,onUser){
   if(decision==='confirm'&&b.status==='confirmed')return;
   if(!['pending_payment','pending_approval','awaiting_payment',...(decision==='decline'?['confirmed']:[])].includes(b.status))throw Error('This request has already been processed.');
   if(decision==='confirm'){const closed=await t.get(doc(db,'closedDates',b.date));if(closed.exists())throw Error('This date is blocked for vacation.');t.update(ref,{status:'confirmed',confirmedAt:serverTimestamp()});}
-  else{const ids=lockIds(b.startAt.toMillis()),locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));t.update(ref,{status:'declined',reviewedAt:serverTimestamp()});ids.forEach((key,i)=>{if(locks[i].data()?.bookingId===id)t.delete(doc(db,'timeLocks',key));});}
+  else{const ids=lockIds(b.startAt.toMillis(),bookingDuration(b)),locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));t.update(ref,{status:'declined',reviewedAt:serverTimestamp()});ids.forEach((key,i)=>{if(locks[i].data()?.bookingId===id)t.delete(doc(db,'timeLocks',key));});}
  });},
  };
 }

@@ -11,3 +11,4 @@ import worker,{run} from './worker.mjs';
 test('disabled deployment does not access external services',async t=>{t.mock.method(globalThis,'fetch',()=>{throw Error('Unexpected network');});await run({SYNC_ENABLED:'false'});});
 test('production and empty test allowlists fail closed',async()=>{await assert.rejects(run({SYNC_ENABLED:'true',SYNC_MODE:'production'}));await assert.rejects(run({SYNC_ENABLED:'true',SYNC_MODE:'dev'}));});
 test('public requests cannot trigger sync',async()=>assert.equal((await worker.fetch()).status,404));
+test('new service-based bookings retain their exact duration when moved',()=>{const booking={...b,durationMinutes:90};const moved={...event,end:{dateTime:'2026-11-02T13:30:00Z'}};assert.equal(planChange(booking,moved,'test1','dev',now).newLocks.length,3);assert.throws(()=>planChange(booking,event,'test1','dev',now));});

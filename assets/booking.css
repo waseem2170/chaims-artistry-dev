@@ -40,3 +40,5 @@
 
 
 .booking-complete .booking-new-intake{display:block;width:auto;margin:16px auto 0;padding:8px 12px;font-size:13px;min-height:40px;background:transparent;color:#d7b997;border:0;text-decoration:underline;text-underline-offset:4px;box-shadow:none}
+
+.booking-change-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0}.booking-selected{font-size:.9rem;color:var(--gold,#dfbb8d);text-align:left;flex:1;min-width:0}.booking-change-bar .text-link{flex:none}#signin-choices>.booking-google{margin-top:0}#signin-choices>.signin-divider{margin:24px 0}

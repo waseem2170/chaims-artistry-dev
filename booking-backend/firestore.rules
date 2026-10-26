@@ -23,7 +23,7 @@ service cloud.firestore {
     return customer() && data.keys().hasOnly(['hour','bookingId'])
      && data.hour is int && key == string(data.hour)
      && !exists(/databases/$(database)/documents/bookings/$(data.bookingId))
-     && b.uid == request.auth.uid && data.hour >= start && data.hour < start + 4;
+     && b.uid == request.auth.uid && data.hour >= start && data.hour < start + int((b.get('durationMinutes',180) + 59) / 60) + 1;
    }
   }
   match /bookings/{id} {
@@ -32,6 +32,7 @@ service cloud.firestore {
    allow delete: if false;
    allow create: if customer() && validBooking(id);
    function person(p) { return p is map && p.keys().hasOnly(['name','makeup']) && p.name is string && p.name.size() > 0 && p.name.size() <= 100 && (p.makeup == 'guest' || p.makeup == 'bridal'); }
+   function minutes(p) { return p.makeup == 'bridal' ? 90 : 60; }
    function held(hour,id) { return getAfter(/databases/$(database)/documents/timeLocks/$(string(hour))).data.bookingId == id; }
    // Belgium uses EU daylight saving: last Sunday of March/October, 01:00 UTC.
    function dstBoundary(year,month) {
@@ -44,7 +45,7 @@ service cloud.firestore {
    function validBooking(id) {
     let b = request.resource.data;
     let start = int(b.startAt.toMillis() / 3600000);
-    return b.keys().hasOnly(['date','hour','name','phone','address','people','note','consent','uid','email','status','reservationFee','currency','startAt','createdAt'])
+    return b.keys().hasOnly(['date','hour','name','phone','address','people','note','consent','uid','email','status','reservationFee','currency','startAt','createdAt','durationMinutes'])
      && b.uid == request.auth.uid && b.email == request.auth.token.email
      && b.name is string && b.name.size() > 0 && b.name.size() <= 100
      && b.phone is string && b.phone.size() >= 6 && b.phone.size() <= 40
@@ -52,6 +53,7 @@ service cloud.firestore {
      && b.note is string && b.note.size() <= 1000 && b.consent == true
      && b.people is list && b.people.size() >= 1 && b.people.size() <= 3
      && person(b.people[0]) && (b.people.size() < 2 || person(b.people[1])) && (b.people.size() < 3 || person(b.people[2]))
+     && (!('durationMinutes' in b) || (b.durationMinutes is int && b.durationMinutes == minutes(b.people[0]) + (b.people.size() > 1 ? minutes(b.people[1]) : 0) + (b.people.size() > 2 ? minutes(b.people[2]) : 0)))
      && b.reservationFee == b.people.size() * 2000 && b.currency == 'eur'
      && b.status == 'pending_payment' && b.createdAt == request.time
      && !exists(/databases/$(database)/documents/closedDates/$(b.date))
@@ -59,7 +61,11 @@ service cloud.firestore {
      && b.startAt is timestamp && b.startAt > request.time && b.startAt.date() > localDate(request.time)
      && b.startAt.minutes() == 0 && b.startAt.seconds() == 0 && b.startAt.nanos() == 0
      && b.hour == localHour(b.startAt) && b.date == dateString(b.startAt)
-     && held(start,id) && held(start + 1,id) && held(start + 2,id) && held(start + 3,id);
+     && held(start,id) && held(start + 1,id)
+     && (b.get('durationMinutes',180) <= 60 || held(start + 2,id))
+     && (b.get('durationMinutes',180) <= 120 || held(start + 3,id))
+     && (b.get('durationMinutes',180) <= 180 || held(start + 4,id))
+     && (b.get('durationMinutes',180) <= 240 || held(start + 5,id));
    }
   }
   // Previous collections are read-only for the admin during migration.
