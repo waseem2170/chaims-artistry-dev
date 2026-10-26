@@ -6,6 +6,16 @@ async function token(json,scope){const key=JSON.parse(json),iat=Math.floor(Date.
 const decode=v=>v.stringValue??v.booleanValue??(v.integerValue!==undefined?Number(v.integerValue):v.timestampValue??(v.arrayValue?(v.arrayValue.values||[]).map(decode):v.mapValue?Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,v])=>[k,decode(v)])):null));
 const fields=o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[k,typeof v==='boolean'?{booleanValue:v}:typeof v==='number'?{integerValue:String(v)}:{stringValue:String(v)}]));
 export async function run(env){
+ if(env.SYNC_VALIDATE_ONLY==='true'){
+  const db=await token(env.FIRESTORE_SYNC_SERVICE_ACCOUNT,'https://www.googleapis.com/auth/datastore');
+  const cal=await token(env.GOOGLE_CALENDAR_SERVICE_ACCOUNT,'https://www.googleapis.com/auth/calendar.events.readonly');
+  const d=await fetch(`https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/calendarSyncHealth/connection`,{headers:{Authorization:'Bearer '+db}});
+  if(!d.ok&&d.status!==404)throw Error('Database connection rejected '+d.status);
+  const c=await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(env.GOOGLE_CALENDAR_ID)}/events?maxResults=1`,{headers:{Authorization:'Bearer '+cal}});
+  if(!c.ok)throw Error('Calendar connection rejected '+c.status);
+  console.info('Calendar sync connection check passed; no bookings changed or emails sent.');
+  return;
+ }
  if(env.SYNC_ENABLED!=='true')return;
  if(env.SYNC_MODE!=='dev')throw Error('Only DEV mode is implemented');
  const ids=(env.TEST_BOOKING_IDS||'').split(',').map(s=>s.trim()).filter(Boolean),emails=new Set((env.TEST_RECIPIENTS||'').split(',').map(s=>s.trim().toLowerCase()));

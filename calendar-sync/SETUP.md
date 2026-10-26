@@ -17,6 +17,8 @@ IAM database credentials bypass Firestore client rules and are not collection-sc
 
 ## Controlled test
 
+For a read-only credential check, temporarily set `SYNC_VALIDATE_ONLY=true` and leave `SYNC_ENABLED=false`. A scheduled invocation obtains Google tokens, reads a fixed Firestore health-document path (404 is acceptable), and checks Calendar events access. It logs a success message without changing bookings or sending email. Return `SYNC_VALIDATE_ONLY=false` before the controlled booking test. This does not validate database writes or email delivery.
+
 Create only clearly labelled test bookings in DEV. Mark them `calendarSyncTest: true` in the console, list their IDs in `TEST_BOOKING_IDS`, and list their test email addresses in `TEST_RECIPIENTS`. Empty allowlists fail closed. Maximum 20 IDs.
 
 After credentials are configured, enable `SYNC_ENABLED=true` for the test. Move a test event by a whole hour on a future date (09:00–19:00 Belgium time), preserving its three-hour duration. Verify the new four-hour lock, old lock release, updated admin view, and one customer email. Delete a second test event and verify cancellation, released locks and one email. Test a conflicting move and a vacation date: the website booking must remain unchanged, with an entry in `calendarSyncErrors`. Google Calendar cannot prevent the original UI edit: invalid calendar changes currently require manual correction; automatic reversal is not implemented.

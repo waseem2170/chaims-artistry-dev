@@ -3,8 +3,13 @@ main = "worker.mjs"
 compatibility_date = "2026-10-01"
 [vars]
 SYNC_ENABLED = "false"
+SYNC_VALIDATE_ONLY = "false"
 SYNC_MODE = "dev"
 FIREBASE_PROJECT_ID = "chaims-artistry"
+GOOGLE_CALENDAR_ID = "ee161f42fbbf2c91412775a6bc1ecb0a86285e077c55df116eb6e586d42df1aa@group.calendar.google.com"
+FROM_EMAIL = "CHAIMS Artistry <bookings@chaimsartistry.com>"
+ADMIN_EMAIL = "chaimsartistry@gmail.com"
+SITE_URL = "https://waseem2170.github.io/chaims-artistry-dev/"
 # Explicit test booking IDs and test inboxes only. Never list real bookings.
 TEST_BOOKING_IDS = ""
 TEST_RECIPIENTS = ""
