@@ -30,9 +30,9 @@ Audit date: 27 October 2026 (Europe/Brussels). **Decision: do not open public bo
 | High | New booking rules allow omitted durationMinutes through a legacy fallback | Require a computed duration on every new booking while retaining compatibility for reading old records; verify rejection in emulator | Open |
 | High | No authenticated Firestore emulator/concurrency evidence | Execute the matrix in TEST-CASES.md, including 30-minute boundary and atomic competing bookings | Pending |
 | High | External processors and consumer Gmail handling not contractually verified | Record Google/Firebase, Cloudflare, Resend, calendar and mailbox terms/DPA and international-transfer safeguards; confirm the chosen mailbox terms are appropriate for customer data | Pending |
-| Medium | Original request relied on Content-Length only for upload cap | Read and cap actual stream; reject malformed multipart | Fixed locally and tested; not deployed |
-| Medium | Invalid/future notification timestamps could pass retry guard | Require a finite, non-future timestamp inside 23-hour window | Fixed locally and tested; not deployed |
-| Medium | DEV admin email link could lose repository path | Resolve admin.html relative to the configured site base | Fixed locally and tested; not deployed; live SITE_URL currently production |
+| Medium | Original request relied on Content-Length only for upload cap | Read and cap actual stream; reject malformed multipart | Pushed to DEV source and tested; shared Worker not deployed |
+| Medium | Invalid/future notification timestamps could pass retry guard | Require a finite, non-future timestamp inside 23-hour window | Pushed to DEV source and tested; shared Worker not deployed |
+| Medium | DEV admin email link could lose repository path | Resolve admin.html relative to the configured site base | Pushed to DEV source and tested; shared Worker not deployed; live SITE_URL currently production |
 | Medium | CORS includes DEV and localhost in shared service | Remove development origins at launch or separate deployments; CORS is not authentication and GitHub Pages origin is shared across repositories | Open |
 | Medium | Outbox saves full customer snapshots indefinitely | Delete delivered snapshots after 7 days; unresolved entries need review, not silent deletion | Approved period; not automated |
 | Medium | Public availability documents expose booking IDs and closed-date metadata | Keep these documents free of customer names/contact data; test public field shape; consider a public availability projection without booking references | Reviewed code; emulator assertion pending |
@@ -48,11 +48,11 @@ Audit date: 27 October 2026 (Europe/Brussels). **Decision: do not open public bo
 
 ## Cleanup inventory
 
-Read-only UI inventory observed 43 booking documents, 5 calendar sync outbox documents, 7 vacation jobs, 65 legacy scheduleDays documents, 1 sync checkpoint and 2 owner/admin records. A separate private manifest contains document IDs; do not publish it in GitHub. Root collection enumeration did not show timeLocks at inspection. Recheck immediately before cleanup; do not infer that no locks can be created later.
+Read-only UI inventory observed 43 booking documents, 5 calendar sync outbox documents, 7 vacation jobs, 65 legacy scheduleDays documents, 1 sync checkpoint and 2 owner/admin records. A separate private manifest contains document IDs; do not publish it in GitHub. Root collection enumeration did not show timeLocks at inspection. Final review also identified 2 closedDates records linked to an approved test vacation.
 
 The pre-launch test cleanup must pause scheduled sync, reconcile/remove corresponding owned Calendar test events without sending cancellation emails, delete confirmed test booking/lock/outbox/vacation/legacy entries, keep admin records and credentials, clear browser test sign-ins, and perform a final clean booking test. Any export used for rollback is itself personal data and needs restricted access and a short deletion date. Deleting Firestore alone does not remove Calendar, mailbox or Resend copies.
 
-No test data has been deleted by this audit. Permanent deletion requires the separately requested approval and a final scope check.
+With the owner’s explicit deletion approval, cleanup removed 43 bookings, 5 outbox records, 7 vacation jobs, 65 legacy availability entries, and the 2 date blocks linked to those test vacations (122 documents total). Calendar sync was paused for deletion and restored afterwards. A final root view contained only owners and calendarSyncHealth; both owner records remained. No cancellation emails were intentionally triggered. Google Calendar events, mailbox/provider copies and Firebase Auth accounts were not deleted. Their cleanup remains open.
 
 ## Sign-off gates
 

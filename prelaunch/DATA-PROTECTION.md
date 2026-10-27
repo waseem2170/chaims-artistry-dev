@@ -53,3 +53,7 @@ Restrict access or stop affected Worker; preserve minimal evidence; identify whi
 ## Cleanup safeguards
 
 The retention planner only proposes review; no deletion is scheduled. A real cleanup job must have a dry-run, exact document manifest, dependency order, race protection, legal/refund holds, failure/retry logging without PII, proof that images/calendar/inbox copies were handled, and a bounded backup/export expiry. Never implement blind TTL on bookings while leaving orphaned locks, events or pending emails.
+
+## Test cleanup evidence — 27 October 2026
+
+After explicit owner approval, 122 Firestore test documents were removed: 43 bookings, 5 outbox snapshots, 7 vacation jobs, 65 legacy availability records and 2 linked vacation date blocks. Both owner records and the sync checkpoint were preserved. Scheduled sync was paused and restored. No customer export was created; private manifests contain only document IDs/counts. Calendar, mailbox, Resend and Authentication copies remain outside this completed Firebase cleanup.
