@@ -1,32 +1,40 @@
-# DEV calendar sync — disabled until configured
+# Google Calendar → booking sync
 
-This is a separate scheduled Cloudflare Worker, not a replacement for the email Worker.
-It polls explicitly allowlisted booking event IDs once per minute. No public endpoint accepts changes.
-Production mode is intentionally rejected. No live tests have been performed.
+This separate scheduled Cloudflare Worker complements the booking email Worker, which writes approved appointments to Google Calendar. No public endpoint accepts sync changes.
 
-## Access preparation
+## Modes and deployment
 
-1. In project `chaims-artistry`, create service account `chaims-calendar-sync-data`.
-2. Create a custom IAM role using `firestore-role.yaml` and assign it to that account. Do not grant Owner, Editor, Firebase Admin, or Authentication permissions.
-3. Store its JSON credential directly as the encrypted Worker secret `FIRESTORE_SYNC_SERVICE_ACCOUNT`. Do not paste it into GitHub, browser code, or chat.
-4. Keep the existing calendar service account's access unchanged. Its JSON goes into `GOOGLE_CALENDAR_SERVICE_ACCOUNT` on this separate Worker. This Worker requests a read-only Calendar OAuth scope.
-5. Configure `RESEND_API_KEY` as a secret. Configure `GOOGLE_CALENDAR_ID`, `FROM_EMAIL`, `ADMIN_EMAIL`, and `SITE_URL` for the test setup.
-6. Deploy with the included Wrangler configuration; leave `SYNC_ENABLED=false` initially.
+The checked-in configuration starts disabled. `SYNC_ENABLED=true` enables scheduled processing.
 
-IAM database credentials bypass Firestore client rules and are not collection-scoped. The custom role omits listing and administrative operations, but can read/write known document paths in its granted scope. The application allowlists are additional safeguards, not IAM isolation. Use a separate database/project before any broader rollout if stronger isolation is required. The current shared Firebase project is retained as requested.
+- `SYNC_MODE=dev` processes only `TEST_BOOKING_IDS` (maximum 20), requires `calendarSyncTest: true` on each booking, and restricts recipients to `TEST_RECIPIENTS`.
+- `SYNC_MODE=bookings` discovers confirmed bookings automatically. It scans 20 documents per scheduled run, ordered by start time and document ID, and checkpoints its cursor in `calendarSyncHealth/scan`. It includes appointments from the preceding 24 hours onward. A separate query retries pending email outbox entries, including cancelled bookings.
 
-## Controlled test
+The cron runs once per minute. Larger lists take multiple runs to cycle through. Firestore reads, Worker invocations and Resend delivery count towards their respective quotas. Billing is not enabled by this code.
 
-For a read-only credential check, temporarily set `SYNC_VALIDATE_ONLY=true` and leave `SYNC_ENABLED=false`. A scheduled invocation obtains Google tokens, reads a fixed Firestore health-document path (404 is acceptable), and checks Calendar events access. It logs a success message without changing bookings or sending email. Return `SYNC_VALIDATE_ONLY=false` before the controlled booking test. This does not validate database writes or email delivery.
+## Credentials and IAM
 
-Create only clearly labelled test bookings in DEV. Mark them `calendarSyncTest: true` in the console, list their IDs in `TEST_BOOKING_IDS`, and list their test email addresses in `TEST_RECIPIENTS`. Empty allowlists fail closed. Maximum 20 IDs.
+Encrypted secrets on `chaims-calendar-sync-dev`:
 
-After credentials are configured, enable `SYNC_ENABLED=true` for the test. Move a test event by a whole hour on a future date (09:00–19:00 Belgium time), preserving its three-hour duration. Verify the new four-hour lock, old lock release, updated admin view, and one customer email. Delete a second test event and verify cancellation, released locks and one email. Test a conflicting move and a vacation date: the website booking must remain unchanged, with an entry in `calendarSyncErrors`. Google Calendar cannot prevent the original UI edit: invalid calendar changes currently require manual correction; automatic reversal is not implemented.
+- `FIRESTORE_SYNC_SERVICE_ACCOUNT`: JSON for `chaims-calendar-sync-data@chaims-artistry.iam.gserviceaccount.com`.
+- `GOOGLE_CALENDAR_SERVICE_ACCOUNT`: JSON for `chaims-calendar-sync@chaims-artistry.iam.gserviceaccount.com`, which has access to the CHAIMS Appointments calendar.
+- `RESEND_API_KEY`: sending key for the verified domain.
 
-Unrelated, all-day and recurring events are rejected. Missing/404 events are not treated as cancellations; explicit cancelled status is required. Existing website bookings are not imported from arbitrary Calendar entries. Previous unpaid requests are not auto-approved.
+The data account uses the custom role in `firestore-role.yaml`. Automatic discovery additionally requires `datastore.entities.list`. These IAM credentials bypass Firestore client security rules and are project-scoped, not restricted to the collections used by this application. No Authentication administration or billing rights are required. Calendar OAuth access is read-only in this Worker. Keep credentials out of GitHub, website files and chat.
 
-The transaction writes the booking, locks and email outbox together. Pending emails are retried with a stable Resend idempotency key. Retries stop after 23 hours to avoid duplicate delivery beyond the provider's deduplication window. Inspect `calendarSyncOutbox` and `calendarSyncErrors` if delivery fails. Repeated schedules cannot apply the same booking state twice. No email is sent for rejected moves.
+Configure `FIREBASE_PROJECT_ID`, `GOOGLE_CALENDAR_ID`, `FROM_EMAIL`, `ADMIN_EMAIL` and `SITE_URL`. The website and sync currently share the same Firebase project and appointment calendar at the owner's request.
 
-Disable the Worker and remove test appointments after the end-to-end test. Do not enable this on real customer bookings yet. Local tests cover validation and orchestration; deployment credentials, real Firestore transactions, Calendar cancellation semantics and real email delivery still require the controlled integration test.
+## Verification and behaviour
+
+`SYNC_VALIDATE_ONLY=true` performs a read-only credential check on scheduled invocation, without booking changes or emails. Restore it to false for processing. This check does not verify query permission, database writes or email delivery.
+
+A controlled live test verified a reschedule, cancellation, released locks and delivered customer emails on 27 October 2026. That deployment used the explicit test allowlist. Automatic discovery is a separate rollout: verify successful query logs after granting list permission and deploying the updated Worker.
+
+Move an approved event to a future hourly start between 09:00 and 19:00 Belgium time, keeping its duration unchanged. Guest makeup takes 60 minutes and bridal 90 minutes per person; legacy bookings without a duration retain 180 minutes. Availability maintains one shared hour between appointments. Explicit cancellation releases the booking's locks. A missing/404 event is not interpreted as cancellation.
+
+Unrelated, recurring, all-day, resized, conflicting and vacation-overlapping moves are rejected. Google Calendar cannot prevent the original UI edit; rejected moves require manual correction. Errors are recorded in `calendarSyncErrors`. Arbitrary calendar entries are not imported, and unpaid requests are not approved by this Worker.
+
+Booking changes, locks and email outbox are written together in a Firestore transaction. Emails use a saved appointment snapshot and a stable Resend idempotency key. Unchanged events do not resend emails. Retries older than 23 hours move to review rather than risk sending outside the provider's deduplication window. Inspect `calendarSyncOutbox` and `calendarSyncErrors` when troubleshooting.
+
+Run local checks with `node --test calendar-sync/*.test.mjs *.test.mjs email-worker/*.test.mjs`.
 
 Reference: https://firebase.google.com/docs/firestore/security/iam
