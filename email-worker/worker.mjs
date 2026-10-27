@@ -1,3 +1,4 @@
+import {boundedFormData,notificationFresh,RequestError} from './security.mjs';
 import {bookingDuration,durationLabel} from '../assets/schedule.mjs';
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const line=value=>escapeHtml(value).replace(/\r?\n/g,'<br>');
@@ -14,7 +15,9 @@ export function bookingEmail(kind,b,id,env){
  const detailRows=row('When',when+' · Belgium time')+row('Duration',durationLabel(bookingDuration(b)))+row('Address',b.address)+row('Your party',people)+(admin?row('Customer',b.name)+row('Email',b.email)+row('Phone',b.phone):'')+(b.note?row('Notes',b.note):'');
  const bankLines=String(env.BANK_DETAILS||'').split(/;|\r?\n/).map(s=>s.trim()).filter(Boolean).join('\n');
  const paymentBlock=payment?`<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;background:#f2f2f2;border:1px solid #cccccc;border-radius:12px"><tr><td style="padding:24px"><p style="margin:0 0 8px;color:#555555;font:11px Arial,sans-serif;letter-spacing:2px">RESERVATION PAYMENT</p><p style="margin:0 0 18px;color:#222222;font:34px Georgia,serif">${escapeHtml(fee)}</p><p style="margin:0;color:#252525;font:15px/1.8 Arial,sans-serif">${line(bankLines)}</p><p style="margin:18px 0 4px;color:#555555;font:12px Arial,sans-serif">Payment reference</p><p style="margin:0;color:#222222;font:bold 14px/1.5 Arial,sans-serif;word-break:break-all">${escapeHtml(id)}</p><p style="margin:18px 0 0;color:#444444;font:13px/1.6 Arial,sans-serif">€20 per person. We’ll email your confirmation once payment is verified.</p></td></tr></table>`:'';
- const adminUrl=new URL('/admin.html',env.SITE_URL||'https://chaimsartistry.com');
+ const siteUrl=new URL(env.SITE_URL||'https://chaimsartistry.com/');
+ if(!siteUrl.pathname.endsWith('/'))siteUrl.pathname+='/';
+ const adminUrl=new URL('admin.html',siteUrl);
  if(adminUrl.protocol!=='https:'&&adminUrl.protocol!=='http:')throw Error('Invalid site URL');
  const cta=admin?`<table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:28px"><tr><td bgcolor="#eeeeee" style="border-radius:28px;text-align:center"><a href="${escapeHtml(adminUrl.href)}" style="display:inline-block;padding:16px 28px;color:#222222;text-decoration:none;font:bold 14px Arial,sans-serif">Review appointment</a></td></tr></table><p style="color:#666666;font:13px/1.6 Arial,sans-serif">Reservation fee: ${escapeHtml(fee)}. Inspiration images, when supplied, are attached and named by person.</p>`:'';
  const calendarCta=confirmed?'<p style="margin:28px 0 10px;color:#222222;font:bold 16px Arial,sans-serif">Add to your calendar</p><p style="color:#555555;font:14px/1.7 Arial,sans-serif">Open the attached <strong>CHAIMS-appointment.ics</strong> file and choose your calendar app to save your appointment. Changes to this saved copy are not automatically synchronised.</p>':'';
@@ -90,16 +93,15 @@ export async function syncCalendar(b,id,env,accessToken) {
 export default {async fetch(request,env){
  const origin=request.headers.get('Origin'),allowed=(env.ALLOWED_ORIGINS||'').split(',');
  if(!allowed.includes(origin))return new Response('Origin denied',{status:403});
- const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'Authorization, Content-Type, X-Firebase-AppCheck','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin'};
+ const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'Authorization, Content-Type, X-Firebase-AppCheck','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
  const reply=(message,status=200)=>new Response(message,{status,headers});
  if(request.method==='OPTIONS')return reply('');if(request.method!=='POST')return reply('Method not allowed',405);
  try{
   if(!env.RESEND_API_KEY||!env.BANK_DETAILS||!env.ADMIN_EMAIL||!env.FROM_EMAIL)return reply('Mail service not configured',503);
-  if(Number(request.headers.get('Content-Length'))>20*1024*1024)return reply('Files too large',413);
   const token=request.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token)return reply('Sign in required',401);
   const auth=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key='+encodeURIComponent(env.FIREBASE_WEB_API_KEY),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:token})});
   if(!auth.ok)return reply('Invalid session',401);const u=(await auth.json()).users?.[0];if(!u?.emailVerified)return reply('Verified account required',403);
-  const form=await request.formData(),id=form.get('bookingId'),kind=form.get('kind');
+  const form=await boundedFormData(request),id=form.get('bookingId'),kind=form.get('kind');
   if(typeof id!=='string'||!/^\w{1,100}$/.test(id)||!['request','confirmed','declined','reschedule','calendar'].includes(kind))return reply('Invalid request',400);
   const base=`https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/`;
   const appCheck=request.headers.get('X-Firebase-AppCheck');
@@ -111,7 +113,7 @@ export default {async fetch(request,env){
   if(kind==='calendar'){await syncCalendar(b,id,env);return reply('Calendar updated');}
   // Retry keys expire after 24h; disallow older notification requests to avoid repeat sends.
   const eventTime=kind==='confirmed'?b.confirmedAt:kind==='declined'?b.reviewedAt:b.createdAt;
-  if(kind!=='reschedule'&&(!eventTime||Date.now()-Date.parse(eventTime)>23*3600000))return reply('Notification window expired; contact the customer manually',409);
+  if(kind!=='reschedule'&&!notificationFresh(eventTime))return reply('Notification window expired; contact the customer manually',409);
   const attachments=[],counts={};
   for(const [field,file] of form){if(typeof file==='string')continue;const person=Number(field.replace('person-',''));if(!/^person-[0-2]$/.test(field)||person>=b.people.length||(counts[person]=(counts[person]||0)+1)>2||file.size>3*1024*1024)return reply('Invalid attachment',400);
    const bytes=new Uint8Array(await file.arrayBuffer());const png=bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71,jpg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255,webp=String.fromCharCode(...bytes.slice(0,4))==='RIFF'&&String.fromCharCode(...bytes.slice(8,12))==='WEBP';
@@ -129,7 +131,7 @@ export default {async fetch(request,env){
   else await send('client',b.email,kind==='confirmed'?'CHAIMS · Your appointment is confirmed':'CHAIMS · Oops… your appointment has been cancelled',kind);
   if(['confirmed','declined'].includes(kind)&&env.GOOGLE_CALENDAR_ID){await syncCalendar(b,id,env);}
   return reply('Emails accepted');
- }catch{return reply('Email delivery did not finish; retry the same booking',502);}
+ }catch(error){return error instanceof RequestError?reply(error.message,error.status):reply('Email delivery did not finish; retry the same booking',502);}
 }};
 
 // A portable calendar attachment for Apple Calendar and Outlook.
