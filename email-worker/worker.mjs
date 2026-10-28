@@ -1,3 +1,4 @@
+import {verifyAppCheck} from './app-check.mjs';
 import {boundedFormData,notificationFresh,RequestError} from './security.mjs';
 import {bookingDuration,durationLabel} from '../assets/schedule.mjs';
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -8,13 +9,13 @@ export function bookingEmail(kind,b,id,env){
  const fee=new Intl.NumberFormat('en-BE',{style:'currency',currency:'EUR'}).format(b.reservationFee/100);
  const people=b.people.map((p,i)=>`${i+1}. ${p.name} · ${p.makeup==='bridal'?'Bridal Makeup':'Guest Makeup'}`).join('\n');
  const admin=kind==='admin',payment=kind==='request',confirmed=kind==='confirmed',reschedule=kind==='reschedule';
- const title=reschedule?'Let’s find another time.':admin?'A new appointment request.':payment?'Your glam moment is calling!':confirmed?'You’re booked in girlll!':'Oops… your appointment has been cancelled.';
+ const title=kind==='expired'?'Your reservation hold has expired.':reschedule?'Let’s find another time.':admin?'A new appointment request.':payment?'Your glam moment is calling!':confirmed?'You’re booked in girlll!':'Oops… your appointment has been cancelled.';
  const badge=reschedule?'LET’S PLAN YOUR VISIT':admin?'APPROVAL NEEDED':payment?'RESERVATION REQUEST':confirmed?'APPOINTMENT CONFIRMED':'APPOINTMENT UPDATE';
- const intro=reschedule?b.rescheduleMessage:admin?'A customer has requested an appointment. Check the bank transfer before approving their reservation.':payment?'Thank you for choosing CHAIMS Artistry. You’ll find your appointment and reservation payment details below.':confirmed?'Your reservation payment has been received. We look forward to creating your look.':'Your appointment request has been declined or cancelled, and the time has been released. If you have already transferred payment, please reply to this email.';
+ const intro=kind==='expired'?'The 48-hour payment confirmation window has ended, so this appointment time has been released. If you already made a transfer, please reply before making another booking. Otherwise, you can request a new available time.':reschedule?b.rescheduleMessage:admin?'A customer has requested an appointment. Check the bank transfer before approving their reservation.':payment?'Thank you for choosing CHAIMS Artistry. You’ll find your appointment and reservation payment details below.':confirmed?'Your reservation payment has been received. We look forward to creating your look.':'Your appointment request has been declined or cancelled, and the time has been released. If you have already transferred payment, please reply to this email.';
  const greeting=admin?'Hello Chaima,':`Hello ${b.name},`;
  const detailRows=row('When',when+' · Belgium time')+row('Duration',durationLabel(bookingDuration(b)))+row('Address',b.address)+row('Your party',people)+(admin?row('Customer',b.name)+row('Email',b.email)+row('Phone',b.phone):'')+(b.note?row('Notes',b.note):'');
  const bankLines=String(env.BANK_DETAILS||'').split(/;|\r?\n/).map(s=>s.trim()).filter(Boolean).join('\n');
- const paymentBlock=payment?`<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;background:#f2f2f2;border:1px solid #cccccc;border-radius:12px"><tr><td style="padding:24px"><p style="margin:0 0 8px;color:#555555;font:11px Arial,sans-serif;letter-spacing:2px">RESERVATION PAYMENT</p><p style="margin:0 0 18px;color:#222222;font:34px Georgia,serif">${escapeHtml(fee)}</p><p style="margin:0;color:#252525;font:15px/1.8 Arial,sans-serif">${line(bankLines)}</p><p style="margin:18px 0 4px;color:#555555;font:12px Arial,sans-serif">Payment reference</p><p style="margin:0;color:#222222;font:bold 14px/1.5 Arial,sans-serif;word-break:break-all">${escapeHtml(id)}</p><p style="margin:18px 0 0;color:#444444;font:13px/1.6 Arial,sans-serif">€20 per person. We’ll email your confirmation once payment is verified.</p></td></tr></table>`:'';
+ const paymentBlock=payment?`<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;background:#f2f2f2;border:1px solid #cccccc;border-radius:12px"><tr><td style="padding:24px"><p style="margin:0 0 8px;color:#555555;font:11px Arial,sans-serif;letter-spacing:2px">RESERVATION PAYMENT</p><p style="margin:0 0 18px;color:#222222;font:34px Georgia,serif">${escapeHtml(fee)}</p><p style="margin:0;color:#252525;font:15px/1.8 Arial,sans-serif">${line(bankLines)}</p><p style="margin:18px 0 4px;color:#555555;font:12px Arial,sans-serif">Payment reference</p><p style="margin:0;color:#222222;font:bold 14px/1.5 Arial,sans-serif;word-break:break-all">${escapeHtml(id)}</p><p style="margin:18px 0 0;color:#444444;font:13px/1.6 Arial,sans-serif">€20 per person. Payment must be verified within 48 hours of your request to keep your time. We’ll email your confirmation once payment is verified.</p></td></tr></table>`:'';
  const siteUrl=new URL(env.SITE_URL||'https://chaimsartistry.com/');
  if(!siteUrl.pathname.endsWith('/'))siteUrl.pathname+='/';
  const adminUrl=new URL('admin.html',siteUrl);
@@ -99,12 +100,13 @@ export default {async fetch(request,env){
  try{
   if(!env.RESEND_API_KEY||!env.BANK_DETAILS||!env.ADMIN_EMAIL||!env.FROM_EMAIL)return reply('Mail service not configured',503);
   const token=request.headers.get('Authorization')?.replace(/^Bearer /,'');if(!token)return reply('Sign in required',401);
-  const auth=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key='+encodeURIComponent(env.FIREBASE_WEB_API_KEY),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:token})});
+  const appCheck=request.headers.get('X-Firebase-AppCheck');
+  await verifyAppCheck(appCheck);
+  const auth=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key='+encodeURIComponent(env.FIREBASE_WEB_API_KEY),{method:'POST',headers:{'Content-Type':'application/json','X-Firebase-AppCheck':appCheck},body:JSON.stringify({idToken:token})});
   if(!auth.ok)return reply('Invalid session',401);const u=(await auth.json()).users?.[0];if(!u?.emailVerified)return reply('Verified account required',403);
   const form=await boundedFormData(request),id=form.get('bookingId'),kind=form.get('kind');
   if(typeof id!=='string'||!/^\w{1,100}$/.test(id)||!['request','confirmed','declined','reschedule','calendar'].includes(kind))return reply('Invalid request',400);
   const base=`https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/`;
-  const appCheck=request.headers.get('X-Firebase-AppCheck');
   const read=path=>fetch(base+path,{headers:{Authorization:'Bearer '+token,...(appCheck?{'X-Firebase-AppCheck':appCheck}:{})}});
   const booking=await read('bookings/'+id);if(!booking.ok)return reply('Booking access denied',403);
   const b=Object.fromEntries(Object.entries((await booking.json()).fields).map(([k,v])=>[k,decode(v)]));

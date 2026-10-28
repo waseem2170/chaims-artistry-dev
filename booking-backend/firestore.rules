@@ -7,6 +7,26 @@ service cloud.firestore {
   function freshAdmin() { return google() && request.time.toMillis() >= request.auth.token.auth_time * 1000 && request.time.toMillis() < request.auth.token.auth_time * 1000 + 1800000; }
   function admin() { return freshAdmin() && exists(/databases/$(database)/documents/owners/$(request.auth.uid)) && get(/databases/$(database)/documents/owners/$(request.auth.uid)).data.enabled == true; }
   match /owners/{uid} { allow get: if freshAdmin() && request.auth.uid == uid; allow list, write: if false; }
+  // One server-enforced ledger per account: five requests per rolling day,
+  // at least one minute apart. The ledger must be written with the new booking.
+  match /bookingLimits/{uid} {
+   allow get: if customer() && request.auth.uid == uid;
+   allow list, delete: if false;
+   allow create, update: if customer() && request.auth.uid == uid && validLimit();
+   function validLimit() {
+    let d = request.resource.data;
+    let freshWindow = !exists(/databases/$(database)/documents/bookingLimits/$(uid)) || request.time >= resource.data.windowStart + duration.value(24,'h');
+    let b = getAfter(/databases/$(database)/documents/bookings/$(d.bookingId)).data;
+    return d.keys().hasOnly(['bookingId','windowStart','lastAt','count'])
+     && d.bookingId is string && d.count is int && d.count >= 1 && d.count <= 5
+     && d.lastAt == request.time
+     && (!exists(/databases/$(database)/documents/bookingLimits/$(uid)) || request.time >= resource.data.lastAt + duration.value(60,'s'))
+     && (freshWindow ? (d.windowStart == request.time && d.count == 1) :
+       (d.windowStart == resource.data.windowStart && d.count == resource.data.count + 1 && request.time >= resource.data.lastAt + duration.value(60,'s')))
+     && !exists(/databases/$(database)/documents/bookings/$(d.bookingId))
+     && b.uid == uid && b.createdAt == request.time;
+   }
+  }
   match /closedDates/{date} {
    allow read: if true;
    allow create, update, delete: if admin();
@@ -53,9 +73,11 @@ service cloud.firestore {
      && b.note is string && b.note.size() <= 1000 && b.consent == true
      && b.people is list && b.people.size() >= 1 && b.people.size() <= 3
      && person(b.people[0]) && (b.people.size() < 2 || person(b.people[1])) && (b.people.size() < 3 || person(b.people[2]))
-     && (!('durationMinutes' in b) || (b.durationMinutes is int && b.durationMinutes == minutes(b.people[0]) + (b.people.size() > 1 ? minutes(b.people[1]) : 0) + (b.people.size() > 2 ? minutes(b.people[2]) : 0)))
+     && b.durationMinutes is int && b.durationMinutes == minutes(b.people[0]) + (b.people.size() > 1 ? minutes(b.people[1]) : 0) + (b.people.size() > 2 ? minutes(b.people[2]) : 0)
      && b.reservationFee == b.people.size() * 2000 && b.currency == 'eur'
      && b.status == 'pending_payment' && b.createdAt == request.time
+     && getAfter(/databases/$(database)/documents/bookingLimits/$(request.auth.uid)).data.bookingId == id
+     && getAfter(/databases/$(database)/documents/bookingLimits/$(request.auth.uid)).data.lastAt == request.time
      && !exists(/databases/$(database)/documents/closedDates/$(b.date))
      && b.hour is int && b.hour >= 9 && b.hour <= 19
      && b.startAt is timestamp && b.startAt > request.time && b.startAt.date() > localDate(request.time)

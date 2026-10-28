@@ -6,3 +6,5 @@ node_modules/
 *credentials*.json
 *-preview*.png
 calendar-connection-test.html
+
+**/node_modules

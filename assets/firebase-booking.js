@@ -48,8 +48,12 @@ export async function connectBooking(config,onUser){
   if(!validateParty(input.people))throw Error('Please check each person’s name and makeup service.');
   const ref=doc(collection(db,'bookings')),start=belgiumTime(input.date,input.hour),durationMinutes=partyDuration(input.people),ids=lockIds(start,durationMinutes);
   await runTransaction(db,async t=>{
+   const limitRef=doc(db,'bookingLimits',u.uid),limitSnap=await t.get(limitRef),limit=limitSnap.data(),now=Date.now();
+   const freshWindow=!limit||now-limit.windowStart.toMillis()>=86400000;
+   if(!freshWindow&&(limit.count>=5||now-limit.lastAt.toMillis()<60000))throw Error('You have made several booking requests. Please wait before requesting another appointment, or contact us.');
    const closed=await t.get(doc(db,'closedDates',input.date));if(closed.exists())throw Error('This date is unavailable. Please choose another day.');
    const locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));if(locks.some(s=>s.exists()))throw Error('This time was just reserved. Please choose another time.');
+   t.set(limitRef,{bookingId:ref.id,windowStart:freshWindow?serverTimestamp():limit.windowStart,lastAt:serverTimestamp(),count:freshWindow?1:limit.count+1});
    t.set(ref,{...input,durationMinutes,uid:u.uid,email:u.email,status:'pending_payment',reservationFee:input.people.length*2000,currency:'eur',startAt:Timestamp.fromMillis(start),createdAt:serverTimestamp()});
    ids.forEach(id=>t.set(doc(db,'timeLocks',id),{hour:Number(id),bookingId:ref.id}));
   });return {id:ref.id};
