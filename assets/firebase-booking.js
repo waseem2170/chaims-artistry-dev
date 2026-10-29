@@ -1,4 +1,5 @@
-import {vacationDates,affectedBookings,withTimeout,expiredVacation} from './vacation.mjs?v=20261025g';
+import {normalisePhone} from './contact.mjs';
+import {vacationDates,affectedBookings,withTimeout,expiredVacation,vacationHours,blockedBooking,mergeClosure} from './vacation.mjs?v=20261028times';
 import {requireFreshAdmin} from './admin-session.mjs';
 import {configureAttestation,bookingAttestation} from './firebase-attestation.js';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
@@ -13,7 +14,7 @@ export async function connectBooking(config,onUser){
  const requireAdmin=async()=>{try{await requireFreshAdmin(auth.currentUser);}catch(e){await signOut(auth);throw e;}if(!await isAdmin())throw Error('Admin access is required. Please sign in with your authorised Google account.');};
  return {
  verifyClient:bookingAttestation,
- watchClosedDates:(next,error)=>onSnapshot(collection(db,'closedDates'),snapshot=>next(new Set(snapshot.docs.map(d=>d.id))),error),
+ watchClosedDates:(next,error)=>onSnapshot(collection(db,'closedDates'),snapshot=>next(new Set(snapshot.docs.filter(d=>!Array.isArray(d.data().hours)||d.data().fullDay).map(d=>d.id))),error),
  signIn:()=>{const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});return withTimeout(signInWithPopup(auth,provider),45000);},
  isEmailLink:()=>isSignInWithEmailLink(auth,location.href),
  sendEmailLink:async email=>{
@@ -31,8 +32,8 @@ export async function connectBooking(config,onUser){
   if(date<=dateKey())return [];
   const start=belgiumTime(date,9)/3600000,end=belgiumTime(date,19)/3600000+6;
   const [closed,snap]=await withTimeout(Promise.all([getDocFromServer(doc(db,'closedDates',date)),getDocsFromServer(query(collection(db,'timeLocks'),where('hour','>=',start),where('hour','<',end)))]));
-  if(closed.exists())return [];
-  return availableStarts(date,new Set(snap.docs.map(d=>d.id)),Date.now(),minutes);
+  
+  return availableStarts(date,new Set(snap.docs.map(d=>d.id)),Date.now(),minutes).filter(slot=>!blockedBooking(closed.data(),{hour:slot.hour,durationMinutes:minutes}));
  },
  book:async input=>{
   const u=auth.currentUser;if(!u)throw Error('Please sign in with Google or an email link.');
@@ -40,7 +41,7 @@ export async function connectBooking(config,onUser){
   await u.getIdToken(true);
   if(!u.emailVerified)throw Error('Please verify your email using the sign-in link first.');
   if(typeof input.name!=='string'||!input.name.trim()||input.name.trim().length>100)throw Error('Please enter your name.');
-  if(typeof input.phone!=='string'||input.phone.trim().length<6||input.phone.trim().length>40)throw Error('Please enter a phone number with at least six characters.');
+  input.phone=normalisePhone(input.phone);
   if(typeof input.address!=='string'||!input.address.trim()||input.address.trim().length>500)throw Error('Please enter the appointment address.');
   if(typeof input.note!=='string'||input.note.length>1000||input.consent!==true)throw Error('Please check the notes and reservation policy.');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(input.date)||!Number.isInteger(input.hour)||input.hour<9||input.hour>19)throw Error('Please choose an available date and time.');
@@ -51,7 +52,7 @@ export async function connectBooking(config,onUser){
    const limitRef=doc(db,'bookingLimits',u.uid),limitSnap=await t.get(limitRef),limit=limitSnap.data(),now=Date.now();
    const freshWindow=!limit||now-limit.windowStart.toMillis()>=86400000;
    if(!freshWindow&&(limit.count>=5||now-limit.lastAt.toMillis()<60000))throw Error('You have made several booking requests. Please wait before requesting another appointment, or contact us.');
-   const closed=await t.get(doc(db,'closedDates',input.date));if(closed.exists())throw Error('This date is unavailable. Please choose another day.');
+   const closed=await t.get(doc(db,'closedDates',input.date));if(blockedBooking(closed.data(),{hour:input.hour,durationMinutes}))throw Error('This time is unavailable. Please choose another time.');
    const locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));if(locks.some(s=>s.exists()))throw Error('This time was just reserved. Please choose another time.');
    t.set(limitRef,{bookingId:ref.id,windowStart:freshWindow?serverTimestamp():limit.windowStart,lastAt:serverTimestamp(),count:freshWindow?1:limit.count+1});
    t.set(ref,{...input,durationMinutes,uid:u.uid,email:u.email,status:'pending_payment',reservationFee:input.people.length*2000,currency:'eur',startAt:Timestamp.fromMillis(start),createdAt:serverTimestamp()});
@@ -60,20 +61,20 @@ export async function connectBooking(config,onUser){
  },
  markReviewed:async id=>{await requireAdmin();await runTransaction(db,async t=>{const ref=doc(db,'bookings',id),snap=await t.get(ref);if(!snap.exists()||snap.data().status!=='pending_payment')throw Error('This request has already changed. Please refresh.');t.update(ref,{adminReviewedAt:serverTimestamp()});});},
  listAdminBookings:async()=>{await requireAdmin();const snap=await getDocs(query(collection(db,'bookings'),where('status','in',['pending_payment','confirmed','pending_approval','awaiting_payment'])));return snap.docs.map(d=>({...d.data(),id:d.id,start:d.data().startAt.toDate().toISOString()})).sort((a,b)=>a.start.localeCompare(b.start));},
- listVacations:async()=>{await requireAdmin();const snap=await getDocsFromServer(collection(db,'vacationJobs'));const active=[];for(const entry of snap.docs){const job={id:entry.id,...entry.data()};if(!expiredVacation(job,dateKey())){active.push(job);continue;}await requireAdmin();await runTransaction(db,async t=>{const fresh=await t.get(entry.ref);if(!fresh.exists()||!expiredVacation(fresh.data(),dateKey()))return;const days=await Promise.all(fresh.data().dates.map(date=>t.get(doc(db,'closedDates',date))));for(const day of days)if(day.exists()&&day.data().jobId===entry.id)t.delete(day.ref);t.delete(entry.ref);});}return active.sort((a,b)=>a.dates[0].localeCompare(b.dates[0]));},
- blockVacation:async values=>{await requireAdmin();const dates=vacationDates(values);if(dates.some(d=>d<dateKey()))throw Error('Vacation dates cannot be in the past.');const job=doc(collection(db,'vacationJobs')),batch=writeBatch(db);dates.forEach(date=>batch.set(doc(db,'closedDates',date),{jobId:job.id,createdAt:serverTimestamp()}));batch.set(job,{dates,createdAt:serverTimestamp(),sent:[],cancelled:[],status:'processing'});await batch.commit();return job.id;},
- vacationCancellations:async jobId=>{await requireAdmin();const jobRef=doc(db,'vacationJobs',jobId),jobSnap=await getDocFromServer(jobRef);if(!jobSnap.exists())throw Error('Vacation not found.');const job=jobSnap.data();if(job.status==='removed')return [];const snap=await getDocsFromServer(query(collection(db,'bookings'),where('status','in',['pending_payment','confirmed','pending_approval','awaiting_payment'])));const affected=affectedBookings(snap.docs.map(d=>({id:d.id,...d.data()})),job.dates);
-  for(const booking of affected){await requireAdmin();await runTransaction(db,async t=>{const ref=doc(db,'bookings',booking.id),current=await t.get(ref);if(!current.exists()||!['pending_payment','confirmed','pending_approval','awaiting_payment'].includes(current.data().status))return;const b=current.data();const closed=await t.get(doc(db,'closedDates',b.date));if(!closed.exists())return;const ids=lockIds(b.startAt.toMillis(),bookingDuration(b)),locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));t.update(ref,{status:'declined',reviewedAt:serverTimestamp(),vacationJob:jobId});t.update(jobRef,{cancelled:arrayUnion(booking.id)});ids.forEach((key,i)=>{if(locks[i].data()?.bookingId===booking.id)t.delete(doc(db,'timeLocks',key));});});}
+ listVacations:async()=>{await requireAdmin();const snap=await getDocsFromServer(collection(db,'vacationJobs'));const active=[];for(const entry of snap.docs){const job={id:entry.id,...entry.data()};if(!expiredVacation(job,dateKey())){active.push(job);continue;}await requireAdmin();await runTransaction(db,async t=>{const fresh=await t.get(entry.ref);if(!fresh.exists()||!expiredVacation(fresh.data(),dateKey()))return;const days=await Promise.all(fresh.data().dates.map(date=>t.get(doc(db,'closedDates',date))));for(const day of days)if(day.exists()){const remaining=mergeClosure(day.data(),entry.id,null);remaining?t.set(day.ref,remaining):t.delete(day.ref);}t.delete(entry.ref);});}return active.sort((a,b)=>a.dates[0].localeCompare(b.dates[0]));},
+ blockVacation:async(values,startHour=0,endHour=24)=>{await requireAdmin();const dates=vacationDates(values),hours=vacationHours(startHour,endHour);if(dates.some(d=>d<dateKey()))throw Error('Vacation dates cannot be in the past.');const job=doc(collection(db,'vacationJobs'));await runTransaction(db,async t=>{const days=await Promise.all(dates.map(date=>t.get(doc(db,'closedDates',date))));days.forEach(day=>t.set(day.ref,mergeClosure(day.data(),job.id,hours)));t.set(job,{dates,startHour,endHour,hours,createdAt:serverTimestamp(),sent:[],cancelled:[],status:'processing'});});return job.id;},
+ vacationCancellations:async jobId=>{await requireAdmin();const jobRef=doc(db,'vacationJobs',jobId),jobSnap=await getDocFromServer(jobRef);if(!jobSnap.exists())throw Error('Vacation not found.');const job=jobSnap.data();if(job.status==='removed')return [];const snap=await getDocsFromServer(query(collection(db,'bookings'),where('status','in',['pending_payment','confirmed','pending_approval','awaiting_payment'])));const affected=affectedBookings(snap.docs.map(d=>({id:d.id,...d.data()})),job.dates,job.hours);
+  for(const booking of affected){await requireAdmin();await runTransaction(db,async t=>{const freshJob=await t.get(jobRef);if(!freshJob.exists()||freshJob.data().status==='removed')return;const ref=doc(db,'bookings',booking.id),current=await t.get(ref);if(!current.exists()||!['pending_payment','confirmed','pending_approval','awaiting_payment'].includes(current.data().status))return;const b=current.data();const closed=await t.get(doc(db,'closedDates',b.date));if(!blockedBooking(closed.data(),b)||!affectedBookings([b],job.dates,job.hours).length)return;const ids=lockIds(b.startAt.toMillis(),bookingDuration(b)),locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));t.update(ref,{status:'declined',reviewedAt:serverTimestamp(),vacationJob:jobId});t.update(jobRef,{cancelled:arrayUnion(booking.id)});ids.forEach((key,i)=>{if(locks[i].data()?.bookingId===booking.id)t.delete(doc(db,'timeLocks',key));});});}
   const latest=(await getDocFromServer(jobRef)).data();return (latest.cancelled||[]).filter(id=>!(latest.sent||[]).includes(id));
  },
  vacationNotified:async(jobId,id)=>{await requireAdmin();await updateDoc(doc(db,'vacationJobs',jobId),{sent:arrayUnion(id)});},
  finishVacation:async jobId=>{await requireAdmin();await updateDoc(doc(db,'vacationJobs',jobId),{status:'complete'});},
- removeVacation:async jobId=>{await requireAdmin();await runTransaction(db,async t=>{const ref=doc(db,'vacationJobs',jobId),snap=await t.get(ref);if(!snap.exists()||snap.data().status!=='complete')throw Error('Finish pending cancellation updates before reopening these dates.');const days=await Promise.all(snap.data().dates.map(date=>t.get(doc(db,'closedDates',date))));for(const day of days)if(day.exists()&&day.data().jobId===jobId)t.delete(day.ref);t.update(ref,{status:'removed'});});},
+ removeVacation:async jobId=>{await requireAdmin();await runTransaction(db,async t=>{const ref=doc(db,'vacationJobs',jobId),snap=await t.get(ref);if(!snap.exists()||snap.data().status!=='complete')throw Error('Finish pending cancellation updates before reopening these dates.');const days=await Promise.all(snap.data().dates.map(date=>t.get(doc(db,'closedDates',date))));for(const day of days)if(day.exists()){const remaining=mergeClosure(day.data(),jobId,null);remaining?t.set(day.ref,remaining):t.delete(day.ref);}t.update(ref,{status:'removed'});});},
  review:async(id,decision)=>{await requireAdmin();return runTransaction(db,async t=>{
   const ref=doc(db,'bookings',id),snap=await t.get(ref);if(!snap.exists())throw Error('Request not found.');const b=snap.data();
   if(decision==='confirm'&&b.status==='confirmed')return;
   if(!['pending_payment','pending_approval','awaiting_payment',...(decision==='decline'?['confirmed']:[])].includes(b.status))throw Error('This request has already been processed.');
-  if(decision==='confirm'){const closed=await t.get(doc(db,'closedDates',b.date));if(closed.exists())throw Error('This date is blocked for vacation.');t.update(ref,{status:'confirmed',confirmedAt:serverTimestamp()});}
+  if(decision==='confirm'){const closed=await t.get(doc(db,'closedDates',b.date));if(blockedBooking(closed.data(),b))throw Error('This time is blocked for vacation.');t.update(ref,{status:'confirmed',confirmedAt:serverTimestamp()});}
   else{const ids=lockIds(b.startAt.toMillis(),bookingDuration(b)),locks=await Promise.all(ids.map(id=>t.get(doc(db,'timeLocks',id))));t.update(ref,{status:'declined',reviewedAt:serverTimestamp()});ids.forEach((key,i)=>{if(locks[i].data()?.bookingId===id)t.delete(doc(db,'timeLocks',key));});}
  });},
  };

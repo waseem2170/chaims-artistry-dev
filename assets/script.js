@@ -112,6 +112,7 @@ if(document.documentElement.classList.contains('skip-intro')){signatureIntro?.re
 signatureIntro?.addEventListener('animationend', event => {
   if (event.target === signatureIntro && ['signature-exit', 'logo-intro-finish'].includes(event.animationName)) {
     signatureIntro.remove();
+    document.documentElement.classList.remove('intro-locked');
   }
 });
 
@@ -200,7 +201,7 @@ document.querySelector('.intro-skip')?.addEventListener('click', event => {
     const timing = animation.effect?.getTiming();
     if (timing?.iterations !== Infinity && target &&
         (target.closest('.logo-intro') || target.matches('.fixed-brand, .hero-inner, .hero-nav'))) {
-      animation.updatePlaybackRate(2.5);
+      animation.updatePlaybackRate(6);
     }
   });
 });
@@ -212,20 +213,6 @@ function measureIntroHeader() {
 }
 measureIntroHeader();
 if ('ResizeObserver' in window) new ResizeObserver(measureIntroHeader).observe(introHeader);
-// Skip is only offered before the homepage begins opening. The final logo
-// movement then runs at its original smooth speed, even after an early Skip.
-document.querySelector('.intro-shutter-top')?.addEventListener('animationstart', event => {
-  if (event.animationName !== 'logo-open-top') return;
-  const skip = document.querySelector('.intro-skip');
-  if (skip) { skip.hidden = true; skip.disabled = true; }
-  document.getAnimations().forEach(animation => {
-    const target = animation.effect?.target;
-    if (target && (target.closest('.logo-intro') || target.matches('.fixed-brand, .hero-inner, .hero-nav'))) {
-      animation.updatePlaybackRate(1);
-    }
-  });
-});
-
 const lowerIntroPanel = document.querySelector('.intro-shutter-bottom');
 lowerIntroPanel?.addEventListener('animationend', event => {
   if (event.animationName === 'logo-open-bottom') lowerIntroPanel.remove();

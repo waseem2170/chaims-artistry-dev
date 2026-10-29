@@ -690,3 +690,7 @@ body.intro-complete .hero-just::after{animation:just-underline-ink 1.6s ease-out
 @media(max-width:700px){.editorial-hero .hero-makeup-texture{object-fit:contain;object-position:left top}}
 
 .skip-intro .signature-intro{display:none!important}.skip-intro .fixed-brand,.skip-intro .hero-nav,.skip-intro .hero-inner{animation:none!important;opacity:1!important}
+
+/* Keep the opening sequence stationary, including mobile touch scrolling. */
+html.intro-locked,html.intro-locked body{overflow:hidden;overscroll-behavior:none;touch-action:none}
+.skip-intro .fixed-brand,.skip-intro .hero-nav,.skip-intro .hero-inner,.skip-intro .mobile-menu-root{animation:none!important;opacity:1!important;visibility:visible!important}

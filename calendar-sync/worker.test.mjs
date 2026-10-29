@@ -31,5 +31,19 @@ test('all-booking mode discovers unflagged bookings, moves locks, emails once, a
  try{await run(env);assert.equal(docs.get(base+'bookings/'+id).fields.hour.integerValue,'12');assert.equal(mails.length,1);assert.match(mails[0].subject,/rescheduled/);assert.equal(docs.get(base+'calendarSyncOutbox/'+id).fields.state.stringValue,'sent');for(const k of lockIds(Date.parse(start),60))assert.ok(!docs.has(base+'timeLocks/'+k));for(const k of lockIds(Date.parse(moved),60))assert.equal(docs.get(base+'timeLocks/'+k).fields.bookingId.stringValue,id);
  await run(env);assert.equal(mails.length,1,'unchanged schedules do not resend');
  event={status:'cancelled',etag:'deleted'};await run(env);assert.equal(docs.get(base+'bookings/'+id).fields.status.stringValue,'declined');assert.equal(mails.length,2);assert.match(mails[1].subject,/cancelled/);for(const k of lockIds(Date.parse(moved),60))assert.ok(!docs.has(base+'timeLocks/'+k));await run(env);assert.equal(mails.length,2);
+
+ const unpaidId='unpaid';const unpaid={...b,status:'pending_payment',createdAt:new Date(Date.now()-49*3600000).toISOString()};
+ save('bookings/'+unpaidId,encodeFields(unpaid));const held=lockIds(Date.parse(start),60);
+ for(const k of held)save('timeLocks/'+k,encodeFields({bookingId:unpaidId,hour:Number(k)}));
+ save('timeLocks/'+held[1],encodeFields({bookingId:'another-booking',hour:Number(held[1])}));
+ await run({...env,EXPIRE_UNPAID_HOLDS:'true',SYNC_TASK:'expire'});
+ assert.equal(docs.get(base+'bookings/'+unpaidId).fields.status.stringValue,'declined');
+ assert.equal(docs.get(base+'bookings/'+unpaidId).fields.cancellationReason.stringValue,'unpaid_hold_expired');
+ assert.ok(!docs.has(base+'timeLocks/'+held[0]));
+ assert.equal(docs.get(base+'timeLocks/'+held[1]).fields.bookingId.stringValue,'another-booking');
+ assert.equal(mails.length,3);assert.match(mails[2].subject,/hold has expired/);assert.match(mails[2].text,/48-hour/);
+ await run({...env,EXPIRE_UNPAID_HOLDS:'true',SYNC_TASK:'expire'});assert.equal(mails.length,3,'expiry never sends twice');
+ save('bookings/recent',encodeFields({...unpaid,createdAt:new Date().toISOString()}));
+ await run({...env,EXPIRE_UNPAID_HOLDS:'true',SYNC_TASK:'expire'});assert.equal(docs.get(base+'bookings/recent').fields.status.stringValue,'pending_payment');
  }finally{globalThis.fetch=original;}
 });

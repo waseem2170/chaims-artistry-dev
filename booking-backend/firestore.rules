@@ -62,13 +62,22 @@ service cloud.firestore {
    function localDate(t) { return timestamp.value(t.toMillis() + ((t >= dstBoundary(t.year(),3) && t < dstBoundary(t.year(),10)) ? 7200000 : 3600000)).date(); }
    function localHour(t) { return t.hours() + ((t >= dstBoundary(t.year(),3) && t < dstBoundary(t.year(),10)) ? 2 : 1); }
    function dateString(t) { return string(t.year()) + '-' + (t.month() < 10 ? '0' : '') + string(t.month()) + '-' + (t.day() < 10 ? '0' : '') + string(t.day()); }
+   function closureAllows(b) {
+    let path = /databases/$(database)/documents/closedDates/$(b.date);
+    let hours = exists(path) ? get(path).data.get('hours',[-1]) : [];
+    return !exists(path) || (!hours.hasAny([-1,b.hour,b.hour+1])
+     && (b.durationMinutes <= 60 || !hours.hasAny([b.hour+2]))
+     && (b.durationMinutes <= 120 || !hours.hasAny([b.hour+3]))
+     && (b.durationMinutes <= 180 || !hours.hasAny([b.hour+4]))
+     && (b.durationMinutes <= 240 || !hours.hasAny([b.hour+5])));
+   }
    function validBooking(id) {
     let b = request.resource.data;
     let start = int(b.startAt.toMillis() / 3600000);
     return b.keys().hasOnly(['date','hour','name','phone','address','people','note','consent','uid','email','status','reservationFee','currency','startAt','createdAt','durationMinutes'])
      && b.uid == request.auth.uid && b.email == request.auth.token.email
      && b.name is string && b.name.size() > 0 && b.name.size() <= 100
-     && b.phone is string && b.phone.size() >= 6 && b.phone.size() <= 40
+     && b.phone is string && b.phone.matches('^[+][1-9][0-9]{7,14}$')
      && b.address is string && b.address.size() > 0 && b.address.size() <= 500
      && b.note is string && b.note.size() <= 1000 && b.consent == true
      && b.people is list && b.people.size() >= 1 && b.people.size() <= 3
@@ -78,7 +87,7 @@ service cloud.firestore {
      && b.status == 'pending_payment' && b.createdAt == request.time
      && getAfter(/databases/$(database)/documents/bookingLimits/$(request.auth.uid)).data.bookingId == id
      && getAfter(/databases/$(database)/documents/bookingLimits/$(request.auth.uid)).data.lastAt == request.time
-     && !exists(/databases/$(database)/documents/closedDates/$(b.date))
+     && closureAllows(b)
      && b.hour is int && b.hour >= 9 && b.hour <= 19
      && b.startAt is timestamp && b.startAt > request.time && b.startAt.date() > localDate(request.time)
      && b.startAt.minutes() == 0 && b.startAt.seconds() == 0 && b.startAt.nanos() == 0

@@ -8,7 +8,7 @@ const uid='customer',email='customer@example.test';
 const user=(id=uid,extra={})=>env.authenticatedContext(id,{email,email_verified:true,auth_time:Math.floor(Date.now()/1000),firebase:{sign_in_provider:'google.com'},...extra}).firestore();
 const day=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
 function booking(db,id,hour=9,{overrides={},ledger=true,count=1,windowStart=serverTimestamp(),locks=true}={}){
- const batch=writeBatch(db),start=belgiumTime(day,hour),b={date:day,hour,name:'Test',phone:'123456789',address:'Test address',people:[{name:'Test',makeup:'guest'}],note:'',consent:true,uid,email,status:'pending_payment',reservationFee:2000,currency:'eur',startAt:Timestamp.fromMillis(start),createdAt:serverTimestamp(),durationMinutes:60,...overrides};
+ const batch=writeBatch(db),start=belgiumTime(day,hour),b={date:day,hour,name:'Test',phone:'+32470123456',address:'Test address',people:[{name:'Test',makeup:'guest'}],note:'',consent:true,uid,email,status:'pending_payment',reservationFee:2000,currency:'eur',startAt:Timestamp.fromMillis(start),createdAt:serverTimestamp(),durationMinutes:60,...overrides};
  batch.set(doc(db,'bookings',id),b);
  if(ledger)batch.set(doc(db,'bookingLimits',uid),{bookingId:id,windowStart,lastAt:serverTimestamp(),count});
  if(locks)for(const k of lockIds(start,b.durationMinutes||60))batch.set(doc(db,'timeLocks',k),{bookingId:id,hour:Number(k)});
@@ -31,6 +31,8 @@ try{
  await check('customer cannot approve own booking or read another',async()=>{await booking(user(),'own');await assertFails(setDoc(doc(user(),'bookings','own'),{status:'confirmed'},{merge:true}));await assertFails(getDoc(doc(user('other'),'bookings','own')));});
  await check('expired admin rejected at 30 minutes',async()=>{await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'owners','admin'),{enabled:true}));await assertFails(setDoc(doc(user('admin',{auth_time:Math.floor(Date.now()/1000)-1801}),'closedDates',day),{jobId:'test'}));await assertSucceeds(setDoc(doc(user('admin'),'closedDates',day),{jobId:'test'}));});
  await check('non-Google admin denied',async()=>{await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'owners','admin'),{enabled:true}));await assertFails(setDoc(doc(user('admin',{firebase:{sign_in_provider:'password'}}),'closedDates',day),{jobId:'test'}));});
+ await check('partial vacation blocks overlap but permits a later appointment',async()=>{await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'closedDates',day),{hours:[12,13,14],fullDay:false}));await assertFails(booking(user(),'overlap',11));await assertSucceeds(booking(user(),'outside',15));});
+ await check('malformed phone rejected',async()=>{await assertFails(booking(user(),'badphone',9,{overrides:{phone:'not a phone'}}));});
  await check('vacation blocks customer booking',async()=>{await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'closedDates',day),{jobId:'test'}));await assertFails(booking(user(),'closed'));});
  await check('concurrent conflicting requests: only one succeeds',async()=>{const r=await Promise.allSettled([booking(user(),'race1'),booking(user(),'race2')]);assert.equal(r.filter(x=>x.status==='fulfilled').length,1);});
  console.log(`${count} authenticated rules/concurrency checks passed`);

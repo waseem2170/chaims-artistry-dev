@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {boundedFormData,notificationFresh} from './security.mjs';
 import worker,{bookingEmail,customerCalendarFile} from './worker.mjs';
-const origin='https://example.test',env={ALLOWED_ORIGINS:origin,RESEND_API_KEY:'fixture',BANK_DETAILS:'fixture',ADMIN_EMAIL:'admin@example.test',FROM_EMAIL:'booking@example.test',FIREBASE_PROJECT_ID:'fixture',FIREBASE_WEB_API_KEY:'fixture',SITE_URL:'https://example.test/dev/'};
+const origin='https://example.test',env={ALLOWED_ORIGINS:origin,RESEND_API_KEY:'fixture',BANK_DETAILS:'fixture',ADMIN_EMAIL:'admin@example.test',FROM_EMAIL:'booking@example.test',FIREBASE_PROJECT_ID:'fixture',FIREBASE_WEB_API_KEY:'fixture',SITE_URL:'https://example.test/dev/',ADMIN_URL:'https://example.test/dev/admin.html'};
 const req=(fields={},headers={})=>{const form=new FormData();for(const [k,v] of Object.entries(fields))form.set(k,v);return new Request(origin,{method:'POST',headers:{Origin:origin,...headers},body:form});};
 const now=Date.now();
 for(const [name,value,expected] of [['fresh',new Date(now).toISOString(),true],['boundary',new Date(now-23*3600000).toISOString(),true],['expired',new Date(now-23*3600000-1).toISOString(),false],['future',new Date(now+1).toISOString(),false],['invalid','broken',false],['missing',undefined,false]])test('notification time: '+name,()=>assert.equal(notificationFresh(value,now),expected));
