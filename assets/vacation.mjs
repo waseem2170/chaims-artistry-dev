@@ -24,3 +24,8 @@ export function mergeClosure(closed,jobId,hours){
  const combined=[...new Set(Object.values(blocks).flat())].sort((a,b)=>a-b);
  return Object.keys(blocks).length?{blocks,hours:combined,fullDay:Array.from({length:24},(_,i)=>i).every(h=>combined.includes(h))}:null;
 }
+
+export function recurringDates(start,end,weekdays=[0,1,2,3,4,5,6]){
+ const allowed=new Set(weekdays);
+ return dateRange(start,end).filter(date=>allowed.has(new Date(date+'T12:00:00Z').getUTCDay()));
+}

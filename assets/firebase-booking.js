@@ -1,5 +1,5 @@
 import {normalisePhone} from './contact.mjs';
-import {vacationDates,affectedBookings,withTimeout,expiredVacation,vacationHours,blockedBooking,mergeClosure} from './vacation.mjs?v=20261029flow';
+import {vacationDates,affectedBookings,withTimeout,expiredVacation,vacationHours,blockedBooking,mergeClosure} from './vacation.mjs?v=20261029repeat';
 import {requireFreshAdmin} from './admin-session.mjs';
 import {configureAttestation,bookingAttestation} from './firebase-attestation.js';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';

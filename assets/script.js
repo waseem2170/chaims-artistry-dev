@@ -341,7 +341,7 @@ revealBookingCue();
   }
   window.addEventListener('scroll', revealMenu, {passive:true});
   window.addEventListener('touchmove', revealMenu, {passive:true});
-  window.addEventListener('pointermove', revealMenu, {passive:true});
+  window.addEventListener('pointerdown', revealMenu, {passive:true});
   window.addEventListener('pageshow', revealMenu);
   mobileMenuRoot.addEventListener('click', armIdleTimer);
   mobileMenuRoot.addEventListener('focusin', revealMenu);

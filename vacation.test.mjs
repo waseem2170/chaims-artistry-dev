@@ -7,3 +7,11 @@ test('vacation dates deduplicate and select only active affected bookings',()=>{
 test('stalled availability fails with a retryable message',async()=>{await assert.rejects(withTimeout(new Promise(()=>{}),5),/try again/);assert.equal(await withTimeout(Promise.resolve(42),10),42);});
 
 test('partial closures protect travel time without blocking the whole day',async()=>{const {vacationHours,blockedBooking,mergeClosure}=await import('./assets/vacation.mjs');const hours=vacationHours(12,14);assert.equal(blockedBooking({hours},{hour:10,durationMinutes:60}),false);assert.equal(blockedBooking({hours},{hour:11,durationMinutes:60}),true);assert.equal(blockedBooking({hours},{hour:14,durationMinutes:60}),true);assert.equal(blockedBooking({hours},{hour:15,durationMinutes:60}),false);assert.equal(blockedBooking({jobId:'legacy'},{hour:15,durationMinutes:60}),true);const merged=mergeClosure(mergeClosure(null,'a',hours),'b',vacationHours(17,18));assert.deepEqual(mergeClosure(merged,'a',null).hours,[17,18]);assert.throws(()=>vacationHours(17,9));});
+
+test('recurring weekdays and weekends stay within the inclusive period across DST', async()=>{
+ const {recurringDates}=await import('./assets/vacation.mjs');
+ assert.deepEqual(recurringDates('2026-10-23','2026-10-27',[1,2,3,4,5]),['2026-10-23','2026-10-26','2026-10-27']);
+ assert.deepEqual(recurringDates('2026-10-23','2026-10-27',[0,6]),['2026-10-24','2026-10-25']);
+ assert.deepEqual(recurringDates('2026-10-23','2026-10-27',[1]),['2026-10-26']);
+ assert.deepEqual(recurringDates('2026-10-23','2026-10-27',[]),[]);
+});
