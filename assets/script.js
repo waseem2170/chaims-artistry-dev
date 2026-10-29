@@ -199,7 +199,7 @@ document.querySelector('.intro-skip')?.addEventListener('click', event => {
   document.getAnimations().forEach(animation => {
     const target = animation.effect?.target;
     const timing = animation.effect?.getTiming();
-    if (timing?.iterations !== Infinity && target &&
+    if (timing?.iterations !== Infinity && target && !target.closest('.hero-just') &&
         (target.closest('.logo-intro, #home, .hero-nav') || target.matches('.fixed-brand, .mobile-menu-root'))) {
       animation.updatePlaybackRate(6);
     }
@@ -492,4 +492,19 @@ revealBookingCue();
  const ready=()=>{imageReady=true;start();};
  if(img.decode)img.decode().then(ready).catch(ready);
  else if(img.complete)ready();else img.addEventListener('load',ready,{once:true});
+})();
+
+// The underline has its own timeline: Skip only accelerates the entrance.
+(async function drawHeroUnderlineAfterEntrance(){
+ if(document.readyState!=='complete')await new Promise(resolve=>window.addEventListener('load',resolve,{once:true}));
+ if(document.fonts)await document.fonts.ready;
+ await new Promise(resolve=>requestAnimationFrame(resolve));
+ const entrance=document.getAnimations().filter(animation=>{
+  const target=animation.effect?.target;
+  return target&&target.closest&&!target.closest('.hero-just')&&
+   (target.closest('.logo-intro,#home,.hero-nav')||target.matches('.fixed-brand'))&&
+   animation.effect.getTiming().iterations!==Infinity&&animation.playState!=='finished';
+ });
+ await Promise.allSettled(entrance.map(animation=>animation.finished));
+ document.body.classList.add('hero-entrance-finished');
 })();
