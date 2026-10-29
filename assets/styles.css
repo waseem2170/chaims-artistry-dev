@@ -658,18 +658,13 @@ body.header-scrolled .hero-nav{background:#270407;border-bottom-color:transparen
 .editorial-hero .hero-bottom-swipe{width:min(49%,700px);left:-7%;bottom:-65px;z-index:1}
 @media(max-width:700px){.editorial-hero .hero-bottom-swipe{width:82%;left:-10%;bottom:-45px}}
 
-/* A slow, one-time underline draws beneath the emphasized word. */
+/* Keep the underline visible even if intro completion is interrupted. */
 .hero-just{position:relative;display:inline-block;font:inherit;color:inherit}
-.hero-just::after{content:'';position:absolute;left:0;right:0;bottom:.015em;height:2px;background:var(--gold);transform:scaleX(0);transform-origin:left center}
-body.intro-complete .hero-just::after{animation:just-underline 2.6s cubic-bezier(.25,.46,.45,.94) .2s both}
-@keyframes just-underline{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@media(prefers-reduced-motion:reduce){.hero-just::after{transform:scaleX(1)}}
-
-/* Native ink skipping leaves a gap around the j; clipping reveals only the underline. */
-.hero-just::after{content:'just';inset:0;height:auto;background:none;color:transparent;font:inherit;letter-spacing:inherit;transform:none;text-decoration-line:underline;text-decoration-color:var(--gold);text-decoration-thickness:2px;text-underline-offset:.07em;text-decoration-skip-ink:auto;clip-path:inset(0 100% -.2em 0);pointer-events:none}
-body.intro-complete .hero-just::after{animation:just-underline-ink 1.6s ease-out .1s both}
+.hero-just::after{content:'just';position:absolute;inset:0;color:transparent;font:inherit;letter-spacing:inherit;text-decoration-line:underline;text-decoration-color:var(--gold);text-decoration-thickness:2px;text-underline-offset:.07em;text-decoration-skip-ink:auto;pointer-events:none;clip-path:inset(0 0 -.2em 0);animation:just-underline-ink 1.6s ease-out 3.3s backwards}
+body.intro-complete .hero-just::after{animation-delay:.1s}
 @keyframes just-underline-ink{from{clip-path:inset(0 100% -.2em 0)}to{clip-path:inset(0 0 -.2em 0)}}
-@media(prefers-reduced-motion:reduce){.hero-just::after{clip-path:none}}
+@media(prefers-reduced-motion:reduce){.hero-just::after{animation:none;clip-path:none}}
+
 
 /* Fit the complete desktop introduction within short and scaled laptop windows. */
 @media(min-width:701px){
