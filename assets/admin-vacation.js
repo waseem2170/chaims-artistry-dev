@@ -1,6 +1,6 @@
 import {locale} from './i18n.js?v=20261025i';
 import {dateKey} from './schedule.mjs';
-import {dateRange,affectedBookings,vacationHours} from './vacation.mjs?v=20261028times';
+import {dateRange,affectedBookings,vacationHours} from './vacation.mjs?v=20261029flow';
 import {bookingConfig} from './booking-config.js';
 import {sendBookingEmail} from './booking-email.js';
 export function setupVacation({getApi,getUser,guard,refreshBookings}){

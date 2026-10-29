@@ -694,3 +694,7 @@ body.intro-complete .hero-just::after{animation:just-underline-ink 1.6s ease-out
 /* Keep the opening sequence stationary, including mobile touch scrolling. */
 html.intro-locked,html.intro-locked body{overflow:hidden;overscroll-behavior:none;touch-action:none}
 .skip-intro .fixed-brand,.skip-intro .hero-nav,.skip-intro .hero-inner,.skip-intro .mobile-menu-root{animation:none!important;opacity:1!important;visibility:visible!important}
+
+/* Email return renders the hero in its settled state, including its artwork. */
+.skip-intro .hero-makeup-wrap,.skip-intro .hero-bottom-swipe,.skip-intro .hero-inner *{animation:none!important}
+@media(max-width:700px){body.at-footer .mobile-menu-root{opacity:0!important;visibility:hidden!important;pointer-events:none!important}}

@@ -1,5 +1,5 @@
 import {normalisePhone} from './contact.mjs';
-import {vacationDates,affectedBookings,withTimeout,expiredVacation,vacationHours,blockedBooking,mergeClosure} from './vacation.mjs?v=20261028times';
+import {vacationDates,affectedBookings,withTimeout,expiredVacation,vacationHours,blockedBooking,mergeClosure} from './vacation.mjs?v=20261029flow';
 import {requireFreshAdmin} from './admin-session.mjs';
 import {configureAttestation,bookingAttestation} from './firebase-attestation.js';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
@@ -9,6 +9,8 @@ import {dateKey,belgiumTime,lockIds,availableStarts,validateParty,partyDuration,
 export async function connectBooking(config,onUser){
  const app=initializeApp(config.firebase);configureAttestation(app,config);
  const auth=getAuth(app),db=getFirestore(app);
+ await auth.authStateReady();
+ onUser(auth.currentUser);
  onAuthStateChanged(auth,onUser);
  const isAdmin=async()=>{const u=auth.currentUser;if(!u||!u.emailVerified)return false;const token=await u.getIdTokenResult();if(token.signInProvider!=='google.com')return false;const owner=await getDoc(doc(db,'owners',u.uid));return owner.exists()&&owner.data().enabled===true;};
  const requireAdmin=async()=>{try{await requireFreshAdmin(auth.currentUser);}catch(e){await signOut(auth);throw e;}if(!await isAdmin())throw Error('Admin access is required. Please sign in with your authorised Google account.');};

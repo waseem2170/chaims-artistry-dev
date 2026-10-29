@@ -200,7 +200,7 @@ document.querySelector('.intro-skip')?.addEventListener('click', event => {
     const target = animation.effect?.target;
     const timing = animation.effect?.getTiming();
     if (timing?.iterations !== Infinity && target &&
-        (target.closest('.logo-intro') || target.matches('.fixed-brand, .hero-inner, .hero-nav'))) {
+        (target.closest('.logo-intro, #home, .hero-nav') || target.matches('.fixed-brand, .mobile-menu-root'))) {
       animation.updatePlaybackRate(6);
     }
   });
@@ -271,7 +271,7 @@ if (experienceSection && 'IntersectionObserver' in window && !reducedMotion.matc
 
 // Hide the floating menu only when the footer occupies the lower viewport.
 (() => {
-  const footer = document.querySelector('footer');
+  const footer = document.querySelector('#contact') || document.querySelector('footer');
   if (!footer) return;
   let frame = 0;
   function updateFooterMenu() {
